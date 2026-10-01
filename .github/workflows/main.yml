@@ -1,0 +1,31 @@
+name: Deploy to FTP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@4.2.0
+        with:
+          server: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASS }}
+          server-dir: ${{ secrets.SERVER_DIR }}
+          local-dir: ./
+          exclude: |
+            **/.git*
+            **/.git*/**
+            docker/**
+            .env
+            .env.example
+            compose.yaml
+            Dockerfile
+            README.md
