@@ -11,6 +11,7 @@ $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
  * Google OAuth 開始
  */
 if ($path === '/auth/google') {
+  $env = loadConfig();
 
   $serviceKey = $_GET['service']
     ?? $_POST['service']
@@ -34,16 +35,14 @@ if ($path === '/auth/google') {
   $_SESSION['google_oauth_service_key'] = $serviceKey;
 
   $params = [
-    'client_id' => getenv('GOOGLE_CLIENT_ID'),
-    'redirect_uri' => getenv('GOOGLE_REDIRECT_URI'),
+    'client_id' => getConfigValue('GOOGLE_CLIENT_ID', $env),
+    'redirect_uri' => getConfigValue('GOOGLE_REDIRECT_URI', $env),
     'response_type' => 'code',
     'scope' => 'openid',
     'state' => $state,
   ];
 
-  $url = 'https://accounts.google.com/o/oauth2/v2/auth?' .
-    http_build_query($params);
-
+  $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params);
   header('Location: ' . $url);
   exit;
 }
@@ -78,6 +77,7 @@ function ensureUserServiceRole(PDO $pdo, $userId, $serviceKey) {
  * Google OAuth callback
  */
 if ($path === '/auth/google/callback') {
+  $env = loadConfig();
 
   $code = $_GET['code'] ?? '';
   $state = $_GET['state'] ?? '';
@@ -115,9 +115,9 @@ if ($path === '/auth/google/callback') {
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => http_build_query([
       'code' => $code,
-      'client_id' => getenv('GOOGLE_CLIENT_ID'),
-      'client_secret' => getenv('GOOGLE_CLIENT_SECRET'),
-      'redirect_uri' => getenv('GOOGLE_REDIRECT_URI'),
+      'client_id' => getConfigValue('GOOGLE_CLIENT_ID', $env),
+      'client_secret' => getConfigValue('GOOGLE_CLIENT_SECRET', $env),
+      'redirect_uri' => getConfigValue('GOOGLE_REDIRECT_URI', $env),
       'grant_type' => 'authorization_code',
     ]),
     CURLOPT_RETURNTRANSFER => true,

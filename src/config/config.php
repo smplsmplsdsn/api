@@ -1,10 +1,10 @@
 <?php
-$envFile = __DIR__ . '/../../.env';
-
-
 $allowedServices = [
   'demo',
 ];
+
+$env = [];
+$envFile = __DIR__ . '/../../.env';
 
 
 /**
@@ -68,6 +68,7 @@ function loadConfig() {
   return $env;
 }
 
+
 /**
  * DB接続を作成する
  */
@@ -100,3 +101,4 @@ function createDatabaseConnection() {
     ]
   );
 }
+
