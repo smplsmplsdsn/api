@@ -58,12 +58,28 @@ try {
   }
 
   /*
-   * databaseディレクトリ内のSQLファイルを取得
+   * databaseディレクトリ内のSQLファイルを再帰的に取得
    */
-  $sqlFiles = glob($sqlDir . '/*.sql');
+  $sqlFiles = [];
 
-  if ($sqlFiles === false || count($sqlFiles) === 0) {
-    throw new RuntimeException('No SQL files found.');
+  $iterator = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator(
+      $sqlDir,
+      FilesystemIterator::SKIP_DOTS
+    )
+  );
+
+  foreach ($iterator as $file) {
+    if ($file->isFile() && $file->getExtension() === 'sql') {
+      $sqlFiles[] = $file->getPathname();
+    }
+  }
+
+  // 実行順を統一
+  sort($sqlFiles);
+
+  if (empty($sqlFiles)) {
+    exit('ERROR: No SQL files found.');
   }
 
   /*
