@@ -1,6 +1,26 @@
 <?php
 session_start();
 
+// CORS
+$allowedOrigins = [
+  'http://localhost:8090',
+];
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+
+if (in_array($origin, $allowedOrigins, true)) {
+  header('Access-Control-Allow-Origin: ' . $origin);
+  header('Access-Control-Allow-Credentials: true');
+  header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+  header('Access-Control-Allow-Headers: Content-Type');
+}
+
+// preflight対応
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+  http_response_code(204);
+  exit;
+}
+
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/lib/ulid.php';
 
@@ -259,6 +279,46 @@ if ($path === '/auth/google/callback') {
   }
 
   exit;
+}
+
+
+/**
+ * サービス固有API
+ */
+$serviceAction = trim($path, '/');
+
+if (
+  $serviceAction !== '' &&
+  preg_match('/^[a-zA-Z0-9_-]+$/', $serviceAction)
+) {
+
+  $serviceKey = $_GET['service']
+    ?? $_POST['service']
+    ?? 'demo';
+
+  $serviceKey = trim((string) $serviceKey);
+
+  if ($serviceKey === '') {
+    http_response_code(400);
+    exit('サービス情報がありません');
+  }
+
+  if (!isValidServiceKey($serviceKey)) {
+    http_response_code(400);
+    exit('無効なサービスです');
+  }
+
+  $serviceFile = __DIR__
+    . '/services/'
+    . $serviceKey
+    . '/'
+    . $serviceAction
+    . '.php';
+
+  if (is_file($serviceFile)) {
+    require $serviceFile;
+    exit;
+  }
 }
 
 

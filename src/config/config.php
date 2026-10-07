@@ -1,6 +1,7 @@
 <?php
 $allowedServices = [
   'demo',
+  'standup',
 ];
 
 $env = [];
