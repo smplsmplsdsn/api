@@ -328,7 +328,7 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 ```json
 {
   "id": 5,
-  "creator_public_id": "01M475CPKJBMY486EKR1F8TD8Q",
+  "creator_public_id": "a1",
   "type": "live",
   "name": "未来の候補が複数",
   "message": "未来の候補を複数持つテストイベントです。",
