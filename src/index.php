@@ -103,6 +103,12 @@ if ($path === '/auth/google/callback') {
   $state = $_GET['state'] ?? '';
 
   $serviceKey = $_SESSION['google_oauth_service_key'] ?? '';
+  $redirectUrl = getRedirectUrl($serviceKey);
+
+  if (!$redirectUrl) {
+    http_response_code(400);
+    exit('リダイレクト先が設定されていません');
+  }
 
   if (!$code) {
     exit('Google OAuth error: code がありません');
@@ -216,9 +222,11 @@ if ($path === '/auth/google/callback') {
       $serviceKey
     );
 
+    session_regenerate_id(true);
+
     $_SESSION['services'][$serviceKey]['user_id'] = $userId;
 
-    header('Location: /me?service=' . urlencode($serviceKey));
+    header('Location: ' . $redirectUrl);
     exit;
   }
 
@@ -268,9 +276,11 @@ if ($path === '/auth/google/callback') {
 
     $pdo->commit();
 
+    session_regenerate_id(true);
+
     $_SESSION['services'][$serviceKey]['user_id'] = $userId;
 
-    header('Location: /me?service=' . urlencode($serviceKey));
+    header('Location: ' . $redirectUrl);
   } catch (Throwable $e) {
 
     $pdo->rollBack();
@@ -421,18 +431,18 @@ if ($path === '/logout') {
     ?? 'demo';
 
   $serviceKey = trim((string) $serviceKey);
+  $redirectUrl = getRedirectUrl($serviceKey);
+
+  if (!$redirectUrl) {
+    http_response_code(400);
+    exit('リダイレクト先が設定されていません');
+  }
 
   unset(
     $_SESSION['services'][$serviceKey]
   );
 
-  header('Content-Type: application/json; charset=UTF-8');
-
-  echo json_encode([
-    'message' => 'ログアウトしました',
-    'service' => $serviceKey,
-  ], JSON_UNESCAPED_UNICODE);
-
+  header('Location: ' . $redirectUrl);
   exit;
 }
 

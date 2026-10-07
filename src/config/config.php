@@ -8,6 +8,34 @@ $env = [];
 $envFile = __DIR__ . '/../../.env';
 
 
+$serviceRedirectProduction = [
+  'standup' => 'https://standupcomedy.github.io/',
+];
+
+$serviceRedirectLocal = [
+  'standup' => 'http://localhost:8090/',
+];
+
+
+/**
+ * リダイレクト先URLを取得する
+ */
+function getRedirectUrl($serviceKey) {
+  global $serviceRedirectRemote;
+  global $serviceRedirectLocal;
+
+  $host = $_SERVER['HTTP_HOST'] ?? '';
+
+  if ($host === 'api.tabinoto.com') {
+    $redirectUrl = $serviceRedirectRemote[$serviceKey] ?? null;
+  } else {
+    $redirectUrl = $serviceRedirectLocal[$serviceKey] ?? null;
+  }
+
+  return $redirectUrl;
+}
+
+
 /**
  * 有効なサービスか確認する
  */
