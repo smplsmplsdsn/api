@@ -4,6 +4,7 @@ session_start();
 // CORS
 $allowedOrigins = [
   'http://localhost:8090',
+  'https://standupcomedy.github.io',
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';

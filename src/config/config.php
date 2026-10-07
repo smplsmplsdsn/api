@@ -21,13 +21,13 @@ $serviceRedirectLocal = [
  * リダイレクト先URLを取得する
  */
 function getRedirectUrl($serviceKey) {
-  global $serviceRedirectRemote;
+  global $serviceRedirectProduction;
   global $serviceRedirectLocal;
 
   $host = $_SERVER['HTTP_HOST'] ?? '';
 
   if ($host === 'api.tabinoto.com') {
-    $redirectUrl = $serviceRedirectRemote[$serviceKey] ?? null;
+    $redirectUrl = $serviceRedirectProduction[$serviceKey] ?? null;
   } else {
     $redirectUrl = $serviceRedirectLocal[$serviceKey] ?? null;
   }
