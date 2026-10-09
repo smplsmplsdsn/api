@@ -25,6 +25,7 @@ services:
     volumes:
       - ./src:/var/www/html
       - ./database:/var/www/database
+      - ./php.ini:/usr/local/etc/php/conf.d/custom.ini:ro
 
   mysql:
     image: mysql:8.4
