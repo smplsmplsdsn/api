@@ -1,7 +1,7 @@
 <?php
 
 $envFile = __DIR__ . '/../.env';
-$sqlDir = __DIR__ . '/../database';
+$sqlDir = __DIR__ . '/../app/database';
 
 header('Content-Type: text/plain; charset=UTF-8');
 

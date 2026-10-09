@@ -1,11 +1,8 @@
 <?php
 session_start();
 
-// CORS
-$allowedOrigins = [
-  'http://localhost:8090',
-  'https://standupcomedy.github.io',
-];
+require_once __DIR__ . '/../app/config/env.php';
+require_once __DIR__ . '/../app/config/domains.php';
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
@@ -22,11 +19,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   exit;
 }
 
-require_once __DIR__ . '/config/config.php';
-require_once __DIR__ . '/lib/ulid.php';
+require_once __DIR__ . '/../app/functions/ulid.php';
+require_once __DIR__ . '/../app/config/config.php';
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-
 
 /**
  * Google OAuth 開始
@@ -107,8 +103,9 @@ if ($path === '/auth/google/callback') {
   $redirectUrl = getRedirectUrl($serviceKey);
 
   if (!$redirectUrl) {
+    echo $redirectUrl;
     http_response_code(400);
-    exit('リダイレクト先が設定されていません');
+    exit('リダイレクト先が設定されていません2' . $serviceKey);
   }
 
   if (!$code) {

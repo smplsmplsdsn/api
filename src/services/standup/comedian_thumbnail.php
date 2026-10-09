@@ -1,10 +1,9 @@
 <?php
-
-require_once __DIR__ . '/../../config/config.php';
-require_once __DIR__ . '/../../lib/ulid.php';
-require_once __DIR__ . '/../../common/image.php';
-
 header('Content-Type: application/json; charset=utf-8');
+
+require_once __DIR__ . '/../../../app/config/config.php';
+require_once __DIR__ . '/../../../app/functions/ulid.php';
+require_once __DIR__ . '/../../../app/functions/image.php';
 
 function comedianThumbnailError(string $message, int $status = 400) {
   http_response_code($status);

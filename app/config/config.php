@@ -1,21 +1,4 @@
 <?php
-$allowedServices = [
-  'demo',
-  'standup',
-];
-
-$env = [];
-$envFile = __DIR__ . '/../../.env';
-
-
-$serviceRedirectProduction = [
-  'standup' => 'https://standupcomedy.github.io/',
-];
-
-$serviceRedirectLocal = [
-  'standup' => 'http://localhost:8090/',
-];
-
 
 /**
  * リダイレクト先URLを取得する

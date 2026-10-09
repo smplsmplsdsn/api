@@ -24,7 +24,7 @@ services:
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
     volumes:
       - ./src:/var/www/html
-      - ./database:/var/www/database
+      - ./app:/var/www/app
       - ./php.ini:/usr/local/etc/php/conf.d/custom.ini:ro
 
   mysql:
