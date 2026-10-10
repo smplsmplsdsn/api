@@ -136,12 +136,17 @@ try {
   $filename = generateUlid();
 
   // 保存先
-  $common_directory_path = '/upload/standup/' . $user['public_id'] . '/profile';
-  $upload_directory = __DIR__ . '/../..' . $common_directory_path;
-  $target_path = $upload_directory . '/' . $filename;
+  $public_path = $user['public_id'] . '/standup/profile';
+  $upload_path = __DIR__ . '/../../upload/' .  $public_path;
 
-  // アップロード先フォルダ $upload_directory のファイル一覧（アップロード後の削除対象）
-  $old_files = glob($upload_directory . '/*') ?: [];
+  if (!is_dir($upload_path) && !mkdir($upload_path, 0755, true) && !is_dir($upload_path)) {
+    imageUploadError('IMAGE_DIRECTORY_CREATE_FAILED');
+  }
+
+  $target_path = $upload_path . '/' . $filename;
+
+  // アップロード先フォルダ $upload_path のファイル一覧（アップロード後の削除対象）
+  $old_files = glob($upload_path . '/*') ?: [];
 
   // 画像保存
   try {
@@ -162,7 +167,7 @@ try {
   }
 
   // 公開用パス: saveImage()が決定した拡張子を使用する
-  $thumbnail_path = $common_directory_path . '/' . basename($saved['upload_path']);
+  $thumbnail_path = '/' . $public_path . '/' . basename($saved['upload_path']);
 
   $status = ($comedian['name'] !== '') ? 'active' : 'inactive';
 

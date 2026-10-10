@@ -13,6 +13,17 @@
  * OSの /tmp に書き出される
  */
 
+function imageUploadError(string $message, int $status = 400) {
+  http_response_code($status);
+
+  echo json_encode([
+    'success' => false,
+    'error' => $message
+  ], JSON_UNESCAPED_UNICODE);
+
+  exit;
+}
+
 /**
  * 画像処理の振り分け
  * 画像を検証し、ImagickまたはGDに処理を振り分ける
@@ -22,12 +33,12 @@ function processImage(array $file, int $max_side = 0, int $max_size = 0) {
   // ガード（ファイルのアップロードが正常に完了していない場合）
   if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
     error_log('Upload error code: ' . ($file['error'] ?? 'missing'));
-    throw new RuntimeException('UPLOAD_FAILED');
+    imageUploadError('UPLOAD_FAILED');
   }
 
   // ガード（HTTPアップロードで送られてきたファイルではない場合）
   if (empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
-    throw new RuntimeException('INVALID_UPLOAD');
+    imageUploadError('INVALID_UPLOAD');
   }
 
   $allowed = [
@@ -43,14 +54,14 @@ function processImage(array $file, int $max_side = 0, int $max_size = 0) {
 
   // ガード（MIME判定機能が使えない場合）
   if (!$finfo) {
-    throw new RuntimeException('MIME_DETECTION_FAILED');
+    imageUploadError('MIME_DETECTION_FAILED');
   }
 
   $mime = finfo_file($finfo, $file['tmp_name']);
   finfo_close($finfo);
 
   if (!in_array($mime, $allowed, true)) {
-    throw new RuntimeException('UNSUPPORTED_IMAGE_TYPE');
+    imageUploadError('UNSUPPORTED_IMAGE_TYPE');
   }
 
   // Imagick優先で処理する
@@ -78,12 +89,12 @@ function processImage(array $file, int $max_side = 0, int $max_size = 0) {
 
   // 処理結果がない場合
   if ($result === null) {
-    throw new RuntimeException('IMAGE_PROCESS_FAILED');
+    imageUploadError('IMAGE_PROCESS_FAILED');
   }
 
   // 加工後の画像サイズを確認
   if ($max_size > 0 && strlen($result['blob']) > $max_size) {
-    throw new RuntimeException('IMAGE_TOO_LARGE');
+    imageUploadError('IMAGE_TOO_LARGE');
   }
 
   return $result;
@@ -523,7 +534,7 @@ function saveImage(array $file, string $target_path, int $max_side = 0, int $max
   ];
 
   if (!isset($extensions[$result['mime']])) {
-    throw new RuntimeException('IMAGE_FORMAT_NOT_SUPPORTED');
+    imageUploadError('IMAGE_FORMAT_NOT_SUPPORTED');
   }
 
   $extension = $extensions[$result['mime']];
@@ -534,16 +545,23 @@ function saveImage(array $file, string $target_path, int $max_side = 0, int $max
 
   $upload_path = $directory . DIRECTORY_SEPARATOR . $filename . '.' . $extension;
 
+
   // ディレクトリがなければ作成する
   if (!is_dir($directory)) {
+    $parent_directory = dirname($directory);
+
+    if (!is_dir($parent_directory) || !is_writable($parent_directory)) {
+      imageUploadError('IMAGE_DIRECTORY_NOT_WRITABLE');
+    }
+
     if (!mkdir($directory, 0755, true) && !is_dir($directory)) {
-      throw new RuntimeException('IMAGE_DIRECTORY_CREATE_FAILED');
+      imageUploadError('IMAGE_DIRECTORY_CREATE_FAILED');
     }
   }
 
   // 書き込み可能か確認する
   if (!is_writable($directory)) {
-    throw new RuntimeException('IMAGE_DIRECTORY_NOT_WRITABLE');
+    imageUploadError('IMAGE_DIRECTORY_NOT_WRITABLE');
   }
 
   // 一時ファイルを作成する
@@ -555,7 +573,7 @@ function saveImage(array $file, string $target_path, int $max_side = 0, int $max
       @unlink($temp_path);
     }
 
-    throw new RuntimeException('IMAGE_SAVE_FAILED');
+    imageUploadError('IMAGE_SAVE_FAILED');
   }
 
   // 一時ファイルに加工済み画像を書き込む
@@ -564,14 +582,14 @@ function saveImage(array $file, string $target_path, int $max_side = 0, int $max
   if ($written === false || $written !== strlen($blob)) {
     @unlink($temp_path);
 
-    throw new RuntimeException('IMAGE_SAVE_FAILED');
+    imageUploadError('IMAGE_SAVE_FAILED');
   }
 
   // 一時ファイルを正式な保存先に移動する
   if (!rename($temp_path, $upload_path)) {
     @unlink($temp_path);
 
-    throw new RuntimeException('IMAGE_RENAME_FAILED');
+    imageUploadError('IMAGE_RENAME_FAILED');
   }
 
 

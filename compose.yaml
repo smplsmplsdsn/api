@@ -10,6 +10,14 @@ services:
     depends_on:
       - php
 
+  image-nginx:
+    image: nginx:alpine
+    container_name: api-image-nginx
+    ports:
+      - "8094:80"
+    volumes:
+      - ./src/upload:/usr/share/nginx/html:ro
+
   php:
     build:
       context: .

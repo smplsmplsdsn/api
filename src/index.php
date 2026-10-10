@@ -105,11 +105,17 @@ if ($path === '/auth/google/callback') {
   if (!$redirectUrl) {
     echo $redirectUrl;
     http_response_code(400);
-    exit('リダイレクト先が設定されていません2' . $serviceKey);
+    exit('リダイレクト先が設定されていません' . $serviceKey);
   }
 
-  if (!$code) {
-    exit('Google OAuth error: code がありません');
+  if (!$serviceKey) {
+    http_response_code(400);
+    exit('サービス情報がありません');
+  }
+
+  if (!isValidServiceKey($serviceKey)) {
+    http_response_code(400);
+    exit('無効なサービスです');
   }
 
   if (
@@ -122,14 +128,9 @@ if ($path === '/auth/google/callback') {
     exit('Google OAuth error: state が一致しません');
   }
 
-  if (!$serviceKey) {
-    http_response_code(400);
-    exit('サービス情報がありません');
-  }
-
-  if (!isValidServiceKey($serviceKey)) {
-    http_response_code(400);
-    exit('無効なサービスです');
+  if (!$code) {
+    header('Location: ' . $redirectUrl);
+    exit();
   }
 
   // Googleへ認証コードを送ってアクセストークンを取得

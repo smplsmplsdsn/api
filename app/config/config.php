@@ -1,17 +1,6 @@
 <?php
 $env = [];
-
-$env_path_production = __DIR__ . "/../.env";
-$env_path_local = __DIR__ . "/../../.env";
-
-if (is_file($env_path_production)) {
-  $envFile = $env_path_production;
-} else if (is_file($env_path_local)) {
-  $envFile = $env_path_local;
-} else {
-  var_dump('ERROR .env がありません');
-  exit();
-}
+$envFile = __DIR__ . "/../../.env";
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
@@ -25,7 +14,12 @@ function getRedirectUrl($serviceKey) {
 
   $host = $_SERVER['HTTP_HOST'] ?? '';
 
-  if ($host === 'api.tabinoto.com') {
+  $is_production = (
+    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') &&
+    stripos($host, 'localhost') === false
+  );
+
+  if ($is_production) {
     $redirectUrl = $serviceRedirectProduction[$serviceKey] ?? null;
   } else {
     $redirectUrl = $serviceRedirectLocal[$serviceKey] ?? null;
