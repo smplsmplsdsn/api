@@ -1,4 +1,20 @@
 <?php
+$env = [];
+
+$env_path_production = __DIR__ . "/../.env";
+$env_path_local = __DIR__ . "/../../.env";
+
+if (is_file($env_path_production)) {
+  $envFile = $env_path_production;
+} else if (is_file($env_path_local)) {
+  $envFile = $env_path_local;
+} else {
+  var_dump('ERROR .env がありません');
+  exit();
+}
+
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 
 /**
  * リダイレクト先URLを取得する
@@ -36,13 +52,19 @@ function isValidServiceKey($serviceKey) {
 /**
  * .env または環境変数から値を取得する
  */
-function getConfigValue($key, $env) {
+function getConfigValue($key, $env = [], $service_key = null) {
 
-  if (isset($env[$key])) {
-    return $env[$key];
+  if ($service_key !== null && $service_key !== '') {
+    $full_key = strtoupper($service_key) . '_' . $key;
+  } else {
+    $full_key = $key;
   }
 
-  $value = getenv($key);
+  if (isset($env[$full_key])) {
+    return $env[$full_key];
+  }
+
+  $value = getenv($full_key);
 
   if ($value !== false) {
     return $value;

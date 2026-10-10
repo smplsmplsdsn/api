@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-require_once __DIR__ . '/../app/config/env.php';
 require_once __DIR__ . '/../app/config/domains.php';
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -52,14 +51,15 @@ if ($path === '/auth/google') {
   $_SESSION['google_oauth_service_key'] = $serviceKey;
 
   $params = [
-    'client_id' => getConfigValue('GOOGLE_CLIENT_ID', $env),
-    'redirect_uri' => getConfigValue('GOOGLE_REDIRECT_URI', $env),
+    'client_id' => getConfigValue('GOOGLE_CLIENT_ID', $env, $serviceKey),
+    'redirect_uri' => getConfigValue('GOOGLE_REDIRECT_URI', $env, $serviceKey),
     'response_type' => 'code',
     'scope' => 'openid',
     'state' => $state,
   ];
 
   $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params);
+
   header('Location: ' . $url);
   exit;
 }
@@ -139,9 +139,9 @@ if ($path === '/auth/google/callback') {
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => http_build_query([
       'code' => $code,
-      'client_id' => getConfigValue('GOOGLE_CLIENT_ID', $env),
-      'client_secret' => getConfigValue('GOOGLE_CLIENT_SECRET', $env),
-      'redirect_uri' => getConfigValue('GOOGLE_REDIRECT_URI', $env),
+      'client_id' => getConfigValue('GOOGLE_CLIENT_ID', $env, $serviceKey),
+      'client_secret' => getConfigValue('GOOGLE_CLIENT_SECRET', $env, $serviceKey),
+      'redirect_uri' => getConfigValue('GOOGLE_REDIRECT_URI', $env, $serviceKey),
       'grant_type' => 'authorization_code',
     ]),
     CURLOPT_RETURNTRANSFER => true,

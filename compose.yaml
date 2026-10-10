@@ -15,14 +15,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: api-php
-    environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
     volumes:
+      - ./.env:/var/www/.env:ro
       - ./src:/var/www/html
       - ./app:/var/www/app
       - ./php.ini:/usr/local/etc/php/conf.d/custom.ini:ro
