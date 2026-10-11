@@ -1,7 +1,19 @@
 <?php
-session_start();
-
+require_once __DIR__ . '/../app/config/config.php';
 require_once __DIR__ . '/../app/config/domains.php';
+require_once __DIR__ . '/../app/functions/ulid.php';
+
+$is_secure = filter_var(getConfigValue('SESSION_COOKIE_SECURE', $env), FILTER_VALIDATE_BOOLEAN);
+
+session_set_cookie_params([
+  'lifetime' => 0,
+  'path' => '/',
+  'secure' => $is_secure,
+  'httponly' => true,
+  'samesite' => $is_secure ? 'None' : 'Lax',
+]);
+
+session_start();
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
@@ -18,17 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   exit;
 }
 
-require_once __DIR__ . '/../app/functions/ulid.php';
-require_once __DIR__ . '/../app/config/config.php';
-
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 /**
  * Google OAuth 開始
  */
 if ($path === '/auth/google') {
-  $env = loadConfig();
-
   $serviceKey = $_GET['service']
     ?? $_POST['service']
     ?? 'demo';
@@ -94,7 +101,7 @@ function ensureUserServiceRole(PDO $pdo, $userId, $serviceKey) {
  * Google OAuth callback
  */
 if ($path === '/auth/google/callback') {
-  $env = loadConfig();
+
 
   $code = $_GET['code'] ?? '';
   $state = $_GET['state'] ?? '';

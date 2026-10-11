@@ -1,25 +1,23 @@
 <?php
-$env = [];
-$envFile = __DIR__ . "/../../.env";
 
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+// 設定値を読み込む
+$env = [];
+
+if (file_exists(__DIR__ . "/../../.env")) {
+  $parsedEnv = parse_ini_file(__DIR__ . "/../../.env");
+  $env = $parsedEnv;
+}
+
 
 /**
  * リダイレクト先URLを取得する
  */
 function getRedirectUrl($serviceKey) {
+  global $env;
   global $serviceRedirectProduction;
   global $serviceRedirectLocal;
 
-  $host = $_SERVER['HTTP_HOST'] ?? '';
-
-  $is_production = (
-    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') &&
-    stripos($host, 'localhost') === false
-  );
-
-  if ($is_production) {
+  if (($env['APP_ENV'] ?? '') === 'production') {
     $redirectUrl = $serviceRedirectProduction[$serviceKey] ?? null;
   } else {
     $redirectUrl = $serviceRedirectLocal[$serviceKey] ?? null;
@@ -27,7 +25,6 @@ function getRedirectUrl($serviceKey) {
 
   return $redirectUrl;
 }
-
 
 /**
  * 有効なサービスか確認する
@@ -68,41 +65,11 @@ function getConfigValue($key, $env = [], $service_key = null) {
 }
 
 /**
- * 設定値を読み込む
- */
-function loadConfig() {
-
-  global $envFile;
-
-  $env = [];
-
-  /*
-   * .env が存在する場合は読み込む。
-   * Docker環境などで存在しない場合は、
-   * Docker Composeから渡された環境変数を使用する。
-   */
-  if (file_exists($envFile)) {
-    $parsedEnv = parse_ini_file($envFile);
-
-    if ($parsedEnv === false) {
-      throw new RuntimeException(
-        'Failed to read .env file.'
-      );
-    }
-
-    $env = $parsedEnv;
-  }
-
-  return $env;
-}
-
-
-/**
  * DB接続を作成する
  */
 function createDatabaseConnection() {
 
-  $env = loadConfig();
+  global $env;
 
   $database = getConfigValue('MYSQL_DATABASE', $env);
   $user = getConfigValue('MYSQL_USER', $env);
