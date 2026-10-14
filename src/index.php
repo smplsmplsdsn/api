@@ -1,0 +1,460 @@
+<?php
+require_once __DIR__ . '/../app/config/config.php';
+require_once __DIR__ . '/../app/config/domains.php';
+require_once __DIR__ . '/../app/functions/ulid.php';
+
+$is_secure = filter_var(getConfigValue('SESSION_COOKIE_SECURE', $env), FILTER_VALIDATE_BOOLEAN);
+
+session_set_cookie_params([
+  'lifetime' => 60 * 60 * 24 * 90,
+  'path' => '/',
+  'secure' => $is_secure,
+  'httponly' => true,
+  'samesite' => $is_secure ? 'None' : 'Lax',
+]);
+
+ini_set('session.gc_maxlifetime', (string) (60 * 60 * 24 * 90));
+
+session_start();
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+
+if (in_array($origin, $allowedOrigins, true)) {
+  header('Access-Control-Allow-Origin: ' . $origin);
+  header('Access-Control-Allow-Credentials: true');
+  header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+  header('Access-Control-Allow-Headers: Content-Type');
+}
+
+// preflight対応
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+  http_response_code(204);
+  exit;
+}
+
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+/**
+ * Google OAuth 開始
+ */
+if ($path === '/auth/google') {
+  $serviceKey = $_GET['service']
+    ?? $_POST['service']
+    ?? 'demo';
+
+  $serviceKey = trim((string) $serviceKey);
+
+  if ($serviceKey === '') {
+    http_response_code(400);
+    exit('サービス情報がありません');
+  }
+
+  if (!isValidServiceKey($serviceKey)) {
+    http_response_code(400);
+    exit('無効なサービスです');
+  }
+
+  $state = bin2hex(random_bytes(16));
+
+  $_SESSION['google_oauth_state'] = $state;
+  $_SESSION['google_oauth_service_key'] = $serviceKey;
+
+  $params = [
+    'client_id' => getConfigValue('GOOGLE_CLIENT_ID', $env, $serviceKey),
+    'redirect_uri' => getConfigValue('GOOGLE_REDIRECT_URI', $env, $serviceKey),
+    'response_type' => 'code',
+    'scope' => 'openid',
+    'state' => $state,
+    'prompt' => 'select_account',
+  ];
+
+  $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params);
+
+  header('Location: ' . $url);
+  exit;
+}
+
+
+/**
+ * ユーザーのサービス参加を保証する
+ */
+function ensureUserServiceRole(PDO $pdo, $userId, $serviceKey) {
+  $stmt = $pdo->prepare('
+    INSERT INTO user_service_roles (
+      user_id,
+      service_key,
+      role,
+      status
+    ) VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      status = VALUES(status),
+      updated_at = CURRENT_TIMESTAMP
+  ');
+
+  $stmt->execute([
+    $userId,
+    $serviceKey,
+    'member',
+    'active',
+  ]);
+}
+
+
+/**
+ * Google OAuth callback
+ */
+if ($path === '/auth/google/callback') {
+
+
+  $code = $_GET['code'] ?? '';
+  $state = $_GET['state'] ?? '';
+
+  $serviceKey = $_SESSION['google_oauth_service_key'] ?? '';
+  $redirectUrl = getRedirectUrl($serviceKey);
+
+  if (!$redirectUrl) {
+    echo $redirectUrl;
+    http_response_code(400);
+    exit('リダイレクト先が設定されていません' . $serviceKey);
+  }
+
+  if (!$serviceKey) {
+    http_response_code(400);
+    exit('サービス情報がありません');
+  }
+
+  if (!isValidServiceKey($serviceKey)) {
+    http_response_code(400);
+    exit('無効なサービスです');
+  }
+
+  if (
+    !$state ||
+    !hash_equals(
+      $_SESSION['google_oauth_state'] ?? '',
+      $state
+    )
+  ) {
+    exit('Google OAuth error: state が一致しません');
+  }
+
+  if (!$code) {
+    header('Location: ' . $redirectUrl);
+    exit();
+  }
+
+  // Googleへ認証コードを送ってアクセストークンを取得
+  $ch = curl_init('https://oauth2.googleapis.com/token');
+
+  curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => http_build_query([
+      'code' => $code,
+      'client_id' => getConfigValue('GOOGLE_CLIENT_ID', $env, $serviceKey),
+      'client_secret' => getConfigValue('GOOGLE_CLIENT_SECRET', $env, $serviceKey),
+      'redirect_uri' => getConfigValue('GOOGLE_REDIRECT_URI', $env, $serviceKey),
+      'grant_type' => 'authorization_code',
+    ]),
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+      'Content-Type: application/x-www-form-urlencoded',
+    ],
+  ]);
+
+  $response = curl_exec($ch);
+
+  if ($response === false) {
+    exit('Google OAuth error: ' . curl_error($ch));
+  }
+
+  curl_close($ch);
+
+  $token = json_decode($response, true);
+
+  if (isset($token['error'])) {
+    exit('Google OAuth error: ' . $token['error']);
+  }
+
+  $idToken = $token['id_token'] ?? '';
+
+  if (!$idToken) {
+    exit('Google OAuth error: id_token がありません');
+  }
+
+  $parts = explode('.', $idToken);
+
+  if (count($parts) !== 3) {
+    exit('Google OAuth error: id_token の形式が不正です');
+  }
+
+  $payload = json_decode(
+    base64_decode(strtr($parts[1], '-_', '+/')),
+    true
+  );
+
+  if (!$payload) {
+    exit('Google OAuth error: id_token の解析に失敗しました');
+  }
+
+  $googleUserId = $payload['sub'] ?? '';
+
+  if (!$googleUserId) {
+    exit('Google OAuth error: sub がありません');
+  }
+
+  // DB接続
+  $pdo = createDatabaseConnection();
+
+  // Googleアカウントを検索
+  $stmt = $pdo->prepare('
+    SELECT user_id
+    FROM user_auth
+    WHERE provider = ?
+    AND provider_user_id = ?
+  ');
+
+  $stmt->execute([
+    'google',
+    $googleUserId,
+  ]);
+
+  $userAuth = $stmt->fetch();
+
+  if ($userAuth) {
+
+    // 既存ユーザー
+    $userId = $userAuth['user_id'];
+
+    ensureUserServiceRole(
+      $pdo,
+      $userId,
+      $serviceKey
+    );
+
+    session_regenerate_id(true);
+
+    $_SESSION['services'][$serviceKey]['user_id'] = $userId;
+
+    header('Location: ' . $redirectUrl);
+    exit;
+  }
+
+  // 新規ユーザー
+  $pdo->beginTransaction();
+
+  try {
+
+    // usersを作成
+    $publicId = generateUlid();
+
+    $stmt = $pdo->prepare('
+      INSERT INTO users (
+        public_id,
+        status
+      ) VALUES (?, ?)
+    ');
+
+    $stmt->execute([
+      $publicId,
+      'active',
+    ]);
+
+    $userId = $pdo->lastInsertId();
+
+    // user_authを作成
+    $stmt = $pdo->prepare('
+      INSERT INTO user_auth (
+        user_id,
+        provider,
+        provider_user_id
+      ) VALUES (?, ?, ?)
+    ');
+
+    $stmt->execute([
+      $userId,
+      'google',
+      $googleUserId,
+    ]);
+
+    // サービスへの参加を保証
+    ensureUserServiceRole(
+      $pdo,
+      $userId,
+      $serviceKey
+    );
+
+    $pdo->commit();
+
+    session_regenerate_id(true);
+
+    $_SESSION['services'][$serviceKey]['user_id'] = $userId;
+
+    header('Location: ' . $redirectUrl);
+  } catch (Throwable $e) {
+
+    $pdo->rollBack();
+
+    throw $e;
+  }
+
+  exit;
+}
+
+
+/**
+ * サービス固有API
+ */
+$serviceAction = trim($path, '/');
+
+if (
+  $serviceAction !== '' &&
+  preg_match('/^[a-zA-Z0-9_-]+$/', $serviceAction)
+) {
+
+  $serviceKey = $_GET['service']
+    ?? $_POST['service']
+    ?? 'demo';
+
+  $serviceKey = trim((string) $serviceKey);
+
+  if ($serviceKey === '') {
+    http_response_code(400);
+    exit('サービス情報がありません');
+  }
+
+  if (!isValidServiceKey($serviceKey)) {
+    http_response_code(400);
+    exit('無効なサービスです');
+  }
+
+  $serviceFile = __DIR__
+    . '/services/'
+    . $serviceKey
+    . '/'
+    . $serviceAction
+    . '.php';
+
+  if (is_file($serviceFile)) {
+    require $serviceFile;
+    exit;
+  }
+}
+
+
+/**
+ * ログインユーザー取得
+ */
+if ($path === '/me') {
+
+  $serviceKey = $_GET['service']
+    ?? $_POST['service']
+    ?? 'demo';
+
+  $serviceKey = trim((string) $serviceKey);
+
+  if ($serviceKey === '') {
+    http_response_code(400);
+    exit('サービス情報がありません');
+  }
+
+  if (!isValidServiceKey($serviceKey)) {
+    http_response_code(400);
+    exit('無効なサービスです');
+  }
+
+  $userId = $_SESSION['services'][$serviceKey]['user_id'] ?? null;
+
+  if (!$userId) {
+    http_response_code(401);
+    echo 'ログインしていません';
+    exit;
+  }
+
+  $pdo = createDatabaseConnection();
+
+  // ユーザーが存在し、かつ対象サービスでactiveか確認
+  $stmt = $pdo->prepare('
+    SELECT
+      u.public_id,
+      u.status,
+      u.created_at
+    FROM users AS u
+
+    INNER JOIN user_service_roles AS usr
+      ON usr.user_id = u.id
+
+    WHERE u.id = ?
+    AND usr.service_key = ?
+    AND usr.role = ?
+    AND usr.status = ?
+  ');
+
+  $stmt->execute([
+    $userId,
+    $serviceKey,
+    'member',
+    'active',
+  ]);
+
+  $user = $stmt->fetch();
+
+  if (!$user) {
+
+    unset(
+      $_SESSION['services'][$serviceKey]
+    );
+
+    http_response_code(401);
+    echo 'ユーザーが存在しないか、サービスを利用できません';
+    exit;
+  }
+
+  if ($user['status'] !== 'active') {
+
+    unset(
+      $_SESSION['services'][$serviceKey]
+    );
+
+    http_response_code(401);
+    echo 'ユーザーが無効になっています';
+    exit;
+  }
+
+  header('Content-Type: application/json; charset=UTF-8');
+
+  echo json_encode([
+    'user' => $user,
+  ], JSON_UNESCAPED_UNICODE);
+
+  exit;
+}
+
+
+/**
+ * ログアウト
+ */
+if ($path === '/logout') {
+
+  $serviceKey = $_GET['service']
+    ?? $_POST['service']
+    ?? 'demo';
+
+  $serviceKey = trim((string) $serviceKey);
+  $redirectUrl = getRedirectUrl($serviceKey);
+
+  if (!$redirectUrl) {
+    http_response_code(400);
+    exit('リダイレクト先が設定されていません');
+  }
+
+  unset(
+    $_SESSION['services'][$serviceKey]
+  );
+
+  header('Location: ' . $redirectUrl);
+  exit;
+}
+
+
+echo 'API OK<br>';
+echo 'MySQL OK<br>';
