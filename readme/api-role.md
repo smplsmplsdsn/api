@@ -1,622 +1,252 @@
 # Standup API：ロール管理仕様
 
-## 1. ロール構成
+## 1. 目的
 
-Standupでは以下の3ロールを使用する。
+Standupサービスにおけるユーザーのロール管理方法と、ロールに応じた権限管理の仕様を定義する。
 
-* `member`
-* `comedian`
-* `venue_manager`
+本仕様では、ユーザー自身によるロールの追加・解除、comedianプロフィールの状態管理、および各APIでの権限判定方法を定める。
 
-### member
+## 2. ロール構成
 
-Standupを利用する基本ロール。
+Standupサービスでは、以下のロールを使用する。
 
-ユーザーがStandupに新規でログインした時点で自動的に以下を登録する。
+| ロール | 役割 | 変更方法 |
+|---|---|---|
+| `member` | 一般ユーザー | ログイン時に自動付与 |
+| `comedian` | コメディアン向け機能の利用 | 本人が追加・解除 |
+| `venue_manager` | 会場管理者向け機能の利用 | 本人が追加・解除 |
 
-```text
-service_key = standup
-role        = member
-status      = active
-```
+`member`はStandupサービスを利用するための基本ロールとし、ユーザー自身による追加・解除は認めない。
 
-`member` はユーザー自身が追加・削除する対象ではない。
+## 3. ロール変更の権限
 
-### comedian
+ロール管理APIでは、ログイン中のユーザー本人のロールのみ変更できる。
 
-Standupでコメディアンとして活動するためのロール。
+- 他のユーザーのロールは変更できない。
+- リクエストに`user_id`を指定しない。
+- 対象ユーザーはセッションから取得する。
+- `member`の追加・解除はロール管理APIでは受け付けない。
+- ロールの追加・解除は、許可された`role`と`status`の組み合わせに限定する。
 
-ユーザー自身が自分に追加・解除できる。
+## 4. データ管理
 
-### venue_manager
+### 4.1 user_service_roles
 
-Standupで会場やお店情報を行うためのロール。
+ユーザーごとのロールと有効状態は、`user_service_roles`テーブルで管理する。
 
-ユーザー自身が自分に追加・解除できる。
+主な管理項目は以下のとおり。
 
----
+- `user_id`
+- `service_key`
+- `role`
+- `status`
 
-## 2. ロール変更の権限
+ロールの有効状態には`active`と`inactive`を使用する。
 
-ユーザーが変更できるのは**自分自身のロールだけ**とする。
+ロールの解除時にレコードは削除せず、`status`を`inactive`に更新する。再登録時は既存レコードを再利用する。
 
-### 変更可能
+同一ユーザー・サービス・ロールの重複登録を防ぐため、データベースの一意制約を利用する。
 
-```text
-自分
-├─ comedian → 追加・解除可能
-└─ venue_manager → 追加・解除可能
-```
+### 4.2 standup_comedians
 
-### 変更不可
+`standup_comedians`テーブルでは、comedianプロフィールとその有効状態を管理する。
 
-```text
-A → Bをcomedianにする
-A → Bのvenue_managerを変更する
-```
+ロールとプロフィールは異なる目的のデータだが、**comedianロールのON/OFF時にはプロフィールの状態も連動して更新する**。
 
-他ユーザーのロールを変更するAPIは作成しない。
+プロフィール情報は、ロールの解除時にも削除・初期化しない。
 
----
+## 5. comedianの有効条件
 
-## 3. ロール管理APIではユーザーIDを指定しない
+comedian向けの機能を利用できるのは、次の両方を満たすユーザーとする。
 
-自分自身のロールのみ変更できるため、ロール変更APIでは`user_id`をリクエストパラメータとして受け取らない。
+1. `user_service_roles`のStandup用`comedian`ロールが`active`
+2. `standup_comedians`のプロフィールが`active`
 
-現在ログインしているユーザーをセッションから取得する。
+共通の権限判定では、この2つの状態を確認する。
 
-```text
-session
-  ↓
-service_key = standup
-  ↓
-現在のuser_id
-```
+### 5.1 プロフィールの有効条件
 
-DB内部では`users.id`を使用する。
+`standup_comedians`のプロフィールは、以下の両方を満たす場合に`active`とする。
 
-外部APIでユーザーを識別する必要がある場合は、これまでの方針どおり`users.public_id`を使用する。
+- `name`が空文字ではない
+- `thumbnail`が空文字ではない
 
----
+条件を満たさない場合は`inactive`とする。
 
-## 4. user_service_roles
+この判定条件は、プロフィール編集時とcomedianロールの再有効化時で共通とする。実装時には同じ条件を使用し、判定の不一致を防ぐ。
 
-既存の`user_service_roles`テーブルを使用する。
+## 6. comedianロールの切り替え
 
-```text
-user_service_roles
-- id
-- user_id
-- service_key
-- role
-- status
-- created_at
-- updated_at
-```
+ロールの追加・解除に伴うデータ更新は、1つのトランザクション内で行う。
 
-1ユーザーが同じサービスで複数のロールを持つことを許可する。
+### 6.1 OFF → ON（追加・再有効化）
 
-例えば、
+1. `user_service_roles`のcomedianロールを`active`にする。
+2. `standup_comedians`のプロフィールを確認する。
+3. プロフィールが存在しない場合は、`status = 'inactive'`で新規作成する。
+4. プロフィールが存在する場合は、プロフィールの有効条件を再判定して`status`を更新する。
+5. トランザクションを確定する。
 
-```text
-user_id = 10
-service_key = standup
-role = member
-status = active
-```
+既存プロフィールの名前やサムネイルなどの情報は保持する。
 
-と、
+### 6.2 ON → OFF（解除）
 
-```text
-user_id = 10
-service_key = standup
-role = comedian
-status = active
-```
+1. `user_service_roles`のcomedianロールを`inactive`にする。
+2. `standup_comedians`のプロフィールが存在する場合は`inactive`にする。
+3. プロフィール情報は削除・初期化しない。
+4. トランザクションを確定する。
 
-を同時に保持できる。
+ロール解除後は、comedian向けの機能を利用できない。
 
----
+### 6.3 再有効化時の扱い
 
-## 5. ロールの有効・無効
+解除前のプロフィール情報は保持されているため、再有効化時にプロフィールの有効条件を再判定する。
 
-ロールを削除するのではなく、`status`を変更する。
+- 名前とサムネイルが揃っている場合：プロフィールを`active`にする。
+- どちらかが不足している場合：プロフィールを`inactive`にする。
 
-例えば、
+過去のプロフィール状態だけを根拠に有効化せず、現在の情報に基づいて判定する。
 
-```text
-comedian / active
-```
+## 7. venue_managerロールの切り替え
 
-を解除すると、
+`venue_manager`は、`user_service_roles`テーブルのみで状態を管理する。
 
-```text
-comedian / inactive
-```
+- ON：`status`を`active`にする。
+- OFF：`status`を`inactive`にする。
+- 既存レコードがある場合は再利用する。
+- `standup_comedians`のデータは変更しない。
 
-に変更する。
+会場管理機能の利用可否は、各APIで`venue_manager`ロールが`active`であることを確認して判定する。
 
-レコード自体は削除しない。
+## 8. 共通の権限判定
 
-再度comedianになる場合は、
+各APIで同じ権限判定を繰り返し実装しないよう、共通関数を用意する。
 
-```text
-comedian / inactive
-        ↓
-comedian / active
-```
-
-に戻す。
-
----
-
-## 6. comedianとstandup_comediansは別管理
-
-`user_service_roles`の`comedian`ロールと、`standup_comedians.status`は**連動させない**。
-
-それぞれ意味が異なる。
-
-### user_service_roles
-
-```text
-comedian / active
-```
-
-意味：
-
-> このユーザーはStandupでcomedianという役割を持っている。
-
-### standup_comedians
-
-```text
-status = active
-```
-
-意味：
-
-> このcomedianプロフィールは有効な状態である。
-
----
-
-## 7. 有効なcomedianの判定
-
-API上で「有効なcomedian」として扱う条件は、以下の両方を満たすこと。
-
-### user_service_roles
-
-```text
-service_key = 'standup'
-role        = 'comedian'
-status      = 'active'
-```
-
-### standup_comedians
-
-```text
-user_id = 対象ユーザー
-status  = 'active'
-```
-
-つまり、
-
-```text
-comedian role    active
-comedian profile active
-```
-
-の両方が成立した場合のみ、有効なcomedianとして扱う。
-
----
-
-## 8. comedianロールを新規追加した場合
-
-ユーザーが自分自身にcomedianロールを追加する。
-
-まず`user_service_roles`を確認する。
-
-### 既存レコードがない場合
-
-以下を新規作成する。
-
-```text
-service_key = standup
-role        = comedian
-status      = active
-```
-
-その後、`standup_comedians`を確認する。
-
-### standup_comediansが存在しない場合
-
-以下のレコードを新規作成する。
-
-```text
-user_id = 自分
-status  = inactive
-```
-
-新規作成時点ではプロフィールを有効にしない。
-
----
-
-## 9. standup_comediansがすでに存在する場合
-
-例えば以下のレコードが既に存在する場合、
-
-```text
-standup_comedians
-user_id = 自分
-status  = inactive
-```
-
-comedianロールを追加しても、変更するのは`user_service_roles`のみとする。
-
-```text
-user_service_roles
-comedian = active
-```
-
-`standup_comedians`は、
-
-```text
-inactive
-```
-
-のまま。
-
-したがって、以下の状態は正常な状態として扱う。
-
-```text
-comedian role    active
-comedian profile inactive
-```
-
----
-
-## 10. comedianプロフィールをactiveにする条件
-
-現在はサムネイルアップロード機能が未実装のため、以下を条件とする。
-
-```text
-nameに値が入っている
-```
-
-つまり、
-
-```text
-standup_comedians.name != ''
-```
-
-となった場合に、
-
-```text
-standup_comedians.status = active
-```
-
-とする。
-
-### 将来
-
-サムネイルアップロード機能が完成した場合、active条件を以下に変更する。
-
-```text
-name != ''
-AND
-thumbnail != ''
-```
-
-ロール管理APIそのものは変更せず、プロフィール編集側のactive判定を変更する。
-
----
-
-## 11. comedianを解除した場合
-
-例えば現在、
-
-```text
-user_service_roles
-comedian = active
-
-standup_comedians
-status = active
-```
-
-のユーザーがcomedianロールを解除する場合、変更するのは`user_service_roles`のみとする。
-
-```text
-user_service_roles
-comedian = inactive
-```
-
-`standup_comedians.status`は変更しない。
-
-結果として、
-
-```text
-comedian role    inactive
-comedian profile active
-```
-
-となる。
-
-この状態は正常な状態として扱う。
-
----
-
-## 12. comedian再登録時
-
-一度comedianロールを解除したユーザーが再びcomedianになる場合、
-
-```text
-user_service_roles
-comedian = inactive
-```
-
-を、
-
-```text
-comedian = active
-```
-
-に戻す。
-
-`standup_comedians`は変更しない。
-
-例えば、
-
-```text
-comedian role    inactive
-comedian profile active
-```
-
-から、
-
-```text
-comedian role    active
-comedian profile active
-```
-
-となる。
-
-これにより、過去に完成させたプロフィールを再度作成する必要はない。
-
----
-
-## 13. comedianの状態遷移
-
-### 新規登録
-
-```text
-member
-   ↓
-comedian role = active
-profile       = inactive
-```
-
-プロフィールを編集し、active条件を満たす。
-
-```text
-comedian role = active
-profile       = active
-```
-
-この状態になると有効なcomedianとして各種機能を利用できる。
-
-### comedianを解除
-
-```text
-comedian role = active
-profile       = active
-```
-
-↓
-
-```text
-comedian role = inactive
-profile       = active
-```
-
-### 再びcomedianになる
-
-```text
-comedian role = inactive
-profile       = active
-```
-
-↓
-
-```text
-comedian role = active
-profile       = active
-```
-
----
-
-## 14. comedianプロフィール編集
-
-`comedian`ロールがactiveであれば、プロフィール準備中でも以下を利用できる。
-
-* 名前の登録・編集
-* サムネイルの登録・編集
-
-### プロフィールがactiveになった後
-
-以下の機能を利用できる。
-
-* 各ソーシャルメディアの登録・編集
-* イベントの作成
-* イベントの編集
-* 会場の作成
-* 会場の編集
-* 候補イベントへの参加登録
-* 候補イベントへの参加取り消し
-* コメント作成
-* コメント編集
-* コメント削除
-
----
-
-## 15. venue_manager
-
-`venue_manager`は現時点では`user_service_roles`のみで管理する。
-
-```text
-service_key = standup
-role        = venue_manager
-status      = active
-```
-
-ユーザー自身が追加・解除できる。
-
-現時点では、会場との個別の紐付けは行わない。
-
-将来的に、
-
-```text
-venue_manager
-    ↓
-特定のvenueのみ管理可能
-```
-
-という要件が必要になった場合、その時点で別途会場との関連テーブルを設計する。
-
----
-
-## 16. 権限チェック用の共通関数
-
-今後のAPIで権限判定を共通化する。
-
-### ロールそのものを確認
+### 8.1 hasActiveRole()
 
 ```php
 hasActiveRole($user_id, $service_key, $role)
 ```
 
-例えば、
+指定されたユーザー・サービス・ロールの組み合わせについて、`user_service_roles.status = 'active'`であるかを判定する。
 
-```php
-hasActiveRole($user_id, 'standup', 'comedian')
-```
+この関数では、プロフィールの状態は判定しない。
 
-では、`user_service_roles`のactive状態のみを確認する。
-
-主に以下で使用する。
-
-* comedianロール追加
-* comedianロール解除
-* 名前編集
-* サムネイル編集
-
----
-
-### 有効なcomedianを確認
+### 8.2 isActiveComedian()
 
 ```php
 isActiveComedian($user_id)
 ```
 
-内部で以下を確認する。
+次の両方を満たす場合に`true`を返す。
 
-```text
-user_service_roles
-comedian / active
+- Standupのcomedianロールが`active`
+- `standup_comedians`のプロフィールが`active`
 
-AND
+comedianとしての活動権限が必要なAPIでは、この関数を利用する。
 
-standup_comedians
-status = active
-```
+## 9. 機能ごとの権限
 
-主に以下で使用する。
+| 機能 | 必要な権限 |
+|---|---|
+| 名前の編集 | comedianロールが`active` |
+| サムネイルの編集 | comedianロールが`active` |
+| SNS情報の編集 | 有効なcomedian |
+| イベントの作成・編集 | 有効なcomedian |
+| 会場の作成・編集 | 有効なcomedian |
+| イベント候補への参加・キャンセル | 有効なcomedian |
+| コメントの投稿・編集・削除 | 有効なcomedian |
+| 会場管理者向け機能 | venue_managerロールが`active` |
 
-* ソーシャルメディア編集
-* イベント作成
-* イベント編集
-* 会場作成
-* 会場編集
-* 候補イベント参加登録
-* 候補イベント参加取り消し
-* コメント作成
-* コメント編集
-* コメント削除
+プロフィールの準備中でも、comedianロールが`active`であれば名前とサムネイルを編集できる。
 
----
+一方、プロフィールが未完成で`inactive`の場合、名前・サムネイル以外のcomedian向け機能は利用できない。
 
-## 17. ロールとcomedianプロフィールの関係
+各APIでは、上記の権限に加えて、対象データの所有者確認や操作対象の状態確認など、個別の認可条件も検証する。
 
-最終的な考え方は以下。
+## 10. 状態管理の整理
 
-```text
-user_service_roles
-        │
-        │ 権限
-        ▼
-   comedian role
-        │
-        │ active
-        ▼
-standup_comedians
-        │
-        │ プロフィール状態
-        ▼
- active / inactive
-```
+ロールとプロフィールの状態の組み合わせは、以下のように扱う。
 
-`user_service_roles`は**権限**を管理し、`standup_comedians.status`は**comedianプロフィールの有効状態**を管理する。
+| comedianロール | プロフィール | 状態・扱い |
+|---|---|---|
+| 未登録 | 未登録 | comedianとして未登録 |
+| `active` | `inactive` | 登録済み・プロフィール準備中 |
+| `active` | `active` | 有効なcomedian |
+| `inactive` | `inactive` | comedian解除済み。プロフィール情報は保持 |
+| `inactive` | `active` | 通常のロール管理処理では発生させない |
 
-この2つは独立して管理する。
+状態の更新は、前述の切り替え処理とプロフィールの有効条件に従って行う。
 
-ただし、新規comedianロール追加時に`standup_comedians`が存在しない場合のみ、`inactive`状態でプロフィールレコードを作成する。
+## 11. APIの実装要件
 
----
+### 11.1 認証・入力検証
 
-## 18. 最終的な状態一覧
+- セッションからログイン中のユーザーを取得する。
+- ユーザーが有効であることを確認する。
+- `role`は`comedian`または`venue_manager`のみ受け付ける。
+- `status`は`active`または`inactive`のみ受け付ける。
+- リクエストボディが不正な場合はエラーを返す。
+- 他のユーザーを指定する入力は受け付けない。
 
-| comedian role | comedian profile | 状態                      |
-| ------------- | ---------------- | ----------------------- |
-| なし            | なし               | memberのみ                |
-| active        | inactive         | comedian登録済み・プロフィール準備中  |
-| active        | active           | **有効なcomedian**         |
-| inactive      | active           | comedian活動停止中・プロフィール保持  |
-| inactive      | inactive         | comedian活動停止中・プロフィール未有効 |
+### 11.2 データ更新
 
-`active / active`のみを「有効なcomedian」として扱う。
+- ロールとプロフィールの関連更新はトランザクション内で行う。
+- 処理の途中でエラーが発生した場合はロールバックする。
+- 同じロールを再度指定しても、状態が正しく維持されるようにする。
+- ロール解除時にプロフィール情報を削除しない。
+- MySQL 8.4の構文に対応したSQLを使用する。
 
----
+### 11.3 レスポンスとエラー処理
 
-## 19. 今後のAPI実装方針
+成功時は、少なくとも以下を返す。
 
-ロール管理を起点として、以下の順番で実装する。
+- `success`
+- `role`
+- `status`
 
-1. ロール管理
-2. コメント投稿
-3. プロフィール編集
-4. イベント作成
-5. イベント編集・候補管理
-6. 出演コメディアン管理
-7. 全APIの権限・バリデーション総点検
+エラー時は`success: false`とエラー内容を返し、適切なHTTPステータスコードを設定する。
 
-各APIでは、共通の権限チェック関数を使用し、APIごとに個別のロール判定を重複して実装しない。
+内部エラーの詳細はAPIレスポンスに露出させず、必要な情報をサーバーログに記録する。
 
----
+## 12. 既存APIへの適用方針
 
-## 20. ロール管理APIの基本方針
+既存の一覧取得APIにおけるcomedianの抽出条件は、現在の仕様を維持する。
 
-ロール管理APIでは、ログイン中のユーザー自身を対象とする。
+本仕様による変更対象は、ロール管理処理、プロフィール状態の更新、および各機能の権限判定とする。
 
-変更対象となるロールは以下の2つ。
+各APIへの権限判定の適用時には、既存の認証処理・SQL・レスポンス形式を確認し、不要な変更を避ける。
 
-```text
-comedian
-venue_manager
-```
+## 13. 実装順序
 
-`member`はStandup参加時に自動付与される基本ロールとする。
+以下の順序で実装・確認を進める。
 
-他ユーザーのロールを変更するAPIは作成しない。
+1. ロール管理API
+2. 共通権限判定関数
+3. コメント投稿・編集・削除API
+4. プロフィール編集API
+5. イベント作成API
+6. イベント編集・候補追加・削除API
+7. 出演コメディアンの追加・変更API
+8. 必要に応じた操作ログ・監査対応
 
-comedianロールの追加時のみ、`standup_comedians`が存在しなければ`inactive`状態で作成する。
+各APIの実装時には、未ログイン、権限不足、プロフィール未完成、有効状態、解除後のアクセスなどを確認する。
 
-それ以外の`user_service_roles`と`standup_comedians`のstatus変更は独立して行う。
+## 14. 確認すべきテストケース
 
-この設計により、**「ロールとしての権限」と「プロフィールとしての有効状態」を明確に分離しつつ、既存プロフィールを保持したままcomedian活動を再開できる構成とする。**
+- comedianロールの新規追加
+- comedianロールの解除
+- comedianロールの再有効化
+- 名前・サムネイルが揃っている場合のプロフィール有効化
+- 名前またはサムネイルが不足している場合のプロフィール無効化
+- 解除後もプロフィール情報が保持されること
+- venue_managerロールの追加・解除でプロフィールが変更されないこと
+- 未ログイン状態でロール管理APIを呼び出した場合
+- 許可されていないロール・状態を指定した場合
+- 更新途中のエラーでデータが不整合にならないこと
+- プロフィール準備中に許可される操作・拒否される操作
+- comedianロール解除後にcomedian向け機能を利用できないこと
+
+## 15. 補足（あとで追記すること）
+
+`member` の status が `inactive` の場合は、ログイン操作はできない（ログアウト時と同様となる）。

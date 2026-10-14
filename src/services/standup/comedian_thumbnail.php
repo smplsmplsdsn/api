@@ -4,6 +4,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../../app/config/config.php';
 require_once __DIR__ . '/../../../app/functions/ulid.php';
 require_once __DIR__ . '/../../../app/functions/image.php';
+require_once __DIR__ . '/../../../app/functions/permissions.php';
 
 function comedianThumbnailError(string $message, int $status = 400) {
   http_response_code($status);
@@ -56,27 +57,8 @@ try {
     comedianThumbnailError('ユーザーが無効です', 403);
   }
 
-  $stmt = $pdo->prepare('
-    SELECT
-      role,
-      status
-    FROM user_service_roles
-    WHERE
-      user_id = ?
-      AND service_key = ?
-      AND role = ?
-    LIMIT 1
-  ');
-
-  $stmt->execute([
-    $user_id,
-    'standup',
-    'comedian'
-  ]);
-
-  $role = $stmt->fetch();
-
-  if (!$role || $role['status'] !== 'active') {
+  // コメディアン権限確認
+  if (!hasActiveRole($pdo, $user_id, 'standup', 'comedian')) {
     comedianThumbnailError('コメディアン権限がありません', 403);
   }
 
@@ -104,7 +86,7 @@ try {
   $upload_path = __DIR__ . '/../../upload/' .  $public_path;
 
   if (!is_dir($upload_path) && !mkdir($upload_path, 0755, true) && !is_dir($upload_path)) {
-    imageUploadError('IMAGE_DIRECTORY_CREATE_FAILED');
+    comedianThumbnailError('IMAGE_DIRECTORY_CREATE_FAILED');
   }
 
   $filename = generateUlid();

@@ -1,11 +1,20 @@
 <?php
-
 header('Content-Type: application/json; charset=UTF-8');
+
+require_once __DIR__ . '/../../../app/functions/permissions.php';
 
 $pdo = createDatabaseConnection();
 
 // ログインユーザー
 $user_id = $_SESSION['services']['standup']['user_id'] ?? null;
+
+$is_banned = false;
+
+// member権限の確認
+if ($user_id !== null && !hasActiveMember($pdo, $user_id, 'standup')) {
+  $user_id = null;
+  $is_banned = true;
+}
 
 $logged_in = false;
 $user_public_id = '';
@@ -76,8 +85,7 @@ if ($user_id !== null) {
 
     $comedian_record_active = (bool) $stmt->fetchColumn();
 
-    $is_comedian = in_array('comedian', $profiles, true)
-      && $comedian_record_active;
+    $is_comedian = in_array('comedian', $profiles, true) && $comedian_record_active;
   }
 }
 
@@ -124,10 +132,10 @@ $past_events = [];
 // イベントで使用する会場ID
 $venue_ids = [];
 
-// イベントで使用する芸人ID
+// イベントで使用するコメディアンID
 $comedian_ids = [];
 
-// 芸人ごとの登録イベント
+// コメディアンごとの登録イベント
 $registered_candidates = [];
 
 foreach ($rows as $row) {
@@ -234,7 +242,7 @@ foreach ($rows as $row) {
   }
 }
 
-// 候補に出演する芸人を取得
+// 候補に出演するコメディアンを取得
 $candidate_id_list = [];
 
 foreach ($events as $event) {
@@ -401,7 +409,7 @@ if (count($venue_ids) > 0) {
   }
 }
 
-// 芸人取得
+// コメディアン取得
 $comedians = [];
 
 $stmt = $pdo->query("
@@ -531,6 +539,7 @@ foreach ($stmt->fetchAll() as $row) {
 echo json_encode([
   'login' => [
     'logged_in' => $logged_in,
+    'is_account_limited' => $is_banned,
     'user_public_id' => $user_public_id,
     'nickname' => $nickname,
     'profiles' => $profiles,

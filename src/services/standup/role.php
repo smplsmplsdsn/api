@@ -2,23 +2,30 @@
 header('Content-Type: application/json; charset=UTF-8');
 
 require_once __DIR__ . '/../../../app/config/config.php';
+require_once __DIR__ . '/../../../app/functions/permissions.php';
+
+function updateError(string $message, int $status = 400) {
+  http_response_code($status);
+
+  echo json_encode([
+    'success' => false,
+    'error' => $message
+  ], JSON_UNESCAPED_UNICODE);
+
+  exit;
+}
 
 try {
   $pdo = createDatabaseConnection();
 
+  // ログイン状態の確認
   $user_id = $_SESSION['services']['standup']['user_id'] ?? null;
 
   if (!$user_id) {
-    http_response_code(401);
-
-    echo json_encode([
-      'success' => false,
-      'error' => 'Not logged in',
-    ], JSON_UNESCAPED_UNICODE);
-
-    exit;
+    updateError('Not logged in', 401);
   }
 
+  // ユーザーの有効状態を確認
   $stmt = $pdo->prepare('
     SELECT id
     FROM users
@@ -34,68 +41,47 @@ try {
   $user = $stmt->fetch();
 
   if (!$user) {
-    http_response_code(401);
-
-    echo json_encode([
-      'success' => false,
-      'error' => 'Invalid user',
-    ], JSON_UNESCAPED_UNICODE);
-
-    exit;
+    updateError('Invalid user', 401);
   }
 
+  // member権限の確認
+  if (!hasActiveMember($pdo, $user_id, 'standup')) {
+    updateError('Member role is inactive', 403);
+  }
+
+  // リクエストの取得
   $input = json_decode(
     file_get_contents('php://input'),
     true
   );
 
   if (!is_array($input)) {
-    http_response_code(400);
-
-    echo json_encode([
-      'success' => false,
-      'error' => 'Invalid request body',
-    ], JSON_UNESCAPED_UNICODE);
-
-    exit;
+    updateError('Invalid request body', 400);
   }
 
   $role = $input['role'] ?? '';
   $status = $input['status'] ?? '';
 
   if (!in_array($role, ['comedian', 'venue_manager'], true)) {
-    http_response_code(400);
-
-    echo json_encode([
-      'success' => false,
-      'error' => 'Invalid role',
-    ], JSON_UNESCAPED_UNICODE);
-
-    exit;
+    updateError('Invalid role', 400);
   }
 
   if (!in_array($status, ['active', 'inactive'], true)) {
-    http_response_code(400);
-
-    echo json_encode([
-      'success' => false,
-      'error' => 'Invalid status',
-    ], JSON_UNESCAPED_UNICODE);
-
-    exit;
+    updateError('Invalid status', 400);
   }
 
   $pdo->beginTransaction();
 
+  // ロールの追加・更新
   $stmt = $pdo->prepare('
     INSERT INTO user_service_roles (
       user_id,
       service_key,
       role,
       status
-    ) VALUES (?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?) AS new
     ON DUPLICATE KEY UPDATE
-      status = VALUES(status),
+      status = new.status,
       updated_at = CURRENT_TIMESTAMP
   ');
 
@@ -106,30 +92,72 @@ try {
     $status,
   ]);
 
-  if ($role === 'comedian' && $status === 'active') {
-    $stmt = $pdo->prepare('
-      SELECT id
-      FROM standup_comedians
-      WHERE user_id = ?
-    ');
+  // comedianロールとプロフィールの状態を連動
+  if ($role === 'comedian') {
 
-    $stmt->execute([
-      $user_id,
-    ]);
+    if ($status === 'active') {
 
-    $comedian = $stmt->fetch();
-
-    if (!$comedian) {
+      // 既存プロフィールの確認
       $stmt = $pdo->prepare('
-        INSERT INTO standup_comedians (
-          user_id,
-          status
-        ) VALUES (?, ?)
+        SELECT id
+        FROM standup_comedians
+        WHERE user_id = ?
+        FOR UPDATE
       ');
 
       $stmt->execute([
         $user_id,
+      ]);
+
+      $comedian = $stmt->fetch();
+
+      if (!$comedian) {
+
+        // プロフィールがなければinactiveで作成
+        $stmt = $pdo->prepare('
+          INSERT INTO standup_comedians (
+            user_id,
+            status
+          ) VALUES (?, ?)
+        ');
+
+        $stmt->execute([
+          $user_id,
+          'inactive',
+        ]);
+
+      } else {
+
+        // 既存プロフィールの完成条件を再判定
+        $stmt = $pdo->prepare("
+          UPDATE standup_comedians
+          SET status = CASE
+            WHEN COALESCE(name, '') <> ''
+              AND COALESCE(thumbnail, '') <> ''
+            THEN 'active'
+            ELSE 'inactive'
+          END
+          WHERE user_id = ?
+        ");
+
+        $stmt->execute([
+          $user_id,
+        ]);
+      }
+
+    } else {
+
+      // comedianロール解除時はプロフィールもinactiveにする
+      // 名前・サムネイルなどのプロフィール情報は保持する
+      $stmt = $pdo->prepare('
+        UPDATE standup_comedians
+        SET status = ?
+        WHERE user_id = ?
+      ');
+
+      $stmt->execute([
         'inactive',
+        $user_id,
       ]);
     }
   }
@@ -143,14 +171,12 @@ try {
   ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
+
   if (isset($pdo) && $pdo->inTransaction()) {
     $pdo->rollBack();
   }
 
-  http_response_code(500);
+  error_log($e->getMessage());
 
-  echo json_encode([
-    'success' => false,
-    'error' => 'Internal server error',
-  ], JSON_UNESCAPED_UNICODE);
+  updateError('Internal server error', 500);
 }

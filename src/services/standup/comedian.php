@@ -2,6 +2,7 @@
 header('Content-Type: application/json; charset=UTF-8');
 
 require_once __DIR__ . '/../../../app/config/config.php';
+require_once __DIR__ . '/../../../app/functions/permissions.php';
 
 function comedianThumbnailError(string $message, int $status = 400) {
   http_response_code($status);
@@ -51,23 +52,7 @@ try {
   }
 
   // コメディアン権限確認
-  $stmt = $pdo->prepare('
-    SELECT id
-    FROM user_service_roles
-    WHERE user_id = ?
-      AND service_key = ?
-      AND role = ?
-      AND status = ?
-  ');
-
-  $stmt->execute([
-    $user_id,
-    'standup',
-    'comedian',
-    'active',
-  ]);
-
-  if (!$stmt->fetch()) {
+  if (!hasActiveRole($pdo, $user_id, 'standup', 'comedian')) {
     comedianThumbnailError('Comedian role is inactive', 403);
   }
 
@@ -241,7 +226,8 @@ try {
     comedianThumbnailError('Comedian profile not found(2)', 404);
   }
 
-  echo json_encode([
+  // レスポンスデータ
+  $response = [
     'success' => true,
     'comedian' => [
       'id' => (string) $comedian['id'],
@@ -255,7 +241,32 @@ try {
       ],
       'status' => $comedian['status'],
     ],
-  ], JSON_UNESCAPED_UNICODE);
+  ];
+
+  // GET: 参加表明している候補情報取得
+  if (($_GET['is_candidate_info'] ?? '') === 'true') {
+
+    $stmt = $pdo->prepare('
+      SELECT
+        secc.candidate_id
+      FROM standup_event_candidate_comedians AS secc
+      INNER JOIN standup_comedians AS sc
+        ON sc.id = secc.comedian_id
+      WHERE sc.user_id = ?
+      ORDER BY secc.candidate_id ASC
+    ');
+
+    $stmt->execute([
+      $user_id,
+    ]);
+
+    $response['registered_candidates'] = array_map(
+      'strval',
+      $stmt->fetchAll(PDO::FETCH_COLUMN)
+    );
+  }
+
+  echo json_encode($response, JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
   error_log($e);
