@@ -18,7 +18,7 @@ src/services/standup/init.php
   "events": [],
   "past_events": [],
   "notices": [],
-  "latest_comments": []
+  "latest_posts": []
 }
 ```
 
@@ -567,7 +567,7 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 
 
 
-## 6. latest_comments
+## 6. latest_posts
 
 Standupのcomedianによる最新コメントを取得する。
 
@@ -581,7 +581,6 @@ Standupのcomedianによる最新コメントを取得する。
 {
   "comment_id": 10,
   "comedian_id": "6",
-  "user_public_id": "8",
   "name": "8テストコメディアン",
   "thumbnail": "",
   "text": "皆さんに楽しんでもらえるライブにします！",
@@ -643,7 +642,7 @@ Standupのcomedianによる最新コメントを取得する。
 
 対象ユーザーごとに取得した最新コメントを比較し、**最新コメントの新しい順に5ユーザー**を返す。
 
-そのため、同じユーザーが複数のコメントを投稿していても、`latest_comments` には最大1件しか登場しない。
+そのため、同じユーザーが複数のコメントを投稿していても、`latest_posts` には最大1件しか登場しない。
 コメント単位の最新5件ではない。
 
 #### 並び順

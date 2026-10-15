@@ -473,59 +473,59 @@ foreach ($stmt->fetchAll() as $row) {
 }
 
 // 最新コメント取得
-$latest_comments = [];
+$latest_posts = [];
 
-$stmt = $pdo->query('
-  SELECT
-    c.id,
-    c.comedian_id,
-    u.public_id,
-    sc.name,
-    sc.thumbnail,
-    c.text,
-    c.created_at
+// $stmt = $pdo->query('
+//   SELECT
+//     c.id,
+//     c.comedian_id,
+//     u.public_id,
+//     sc.name,
+//     sc.thumbnail,
+//     c.text,
+//     c.created_at
 
-  FROM (
-    SELECT
-      id,
-      user_id,
-      comedian_id,
-      text,
-      created_at,
-      ROW_NUMBER() OVER (
-        PARTITION BY user_id
-        ORDER BY created_at DESC, id DESC
-      ) AS rn
-    FROM standup_comments
-    WHERE comedian_id IS NOT NULL
-  ) AS c
+//   FROM (
+//     SELECT
+//       id,
+//       user_id,
+//       comedian_id,
+//       text,
+//       created_at,
+//       ROW_NUMBER() OVER (
+//         PARTITION BY user_id
+//         ORDER BY created_at DESC, id DESC
+//       ) AS rn
+//     FROM standup_comments
+//     WHERE comedian_id IS NOT NULL
+//   ) AS c
 
-  INNER JOIN users AS u
-    ON u.id = c.user_id
+//   INNER JOIN users AS u
+//     ON u.id = c.user_id
 
-  INNER JOIN standup_comedians AS sc
-    ON sc.id = c.comedian_id
+//   INNER JOIN standup_comedians AS sc
+//     ON sc.id = c.comedian_id
 
-  WHERE c.rn = 1
-    AND u.status = "active"
-    AND sc.status = "active"
+//   WHERE c.rn = 1
+//     AND u.status = "active"
+//     AND sc.status = "active"
 
-    AND EXISTS (
-      SELECT 1
-      FROM user_service_roles AS usr
-      WHERE usr.user_id = c.user_id
-        AND usr.service_key = "standup"
-        AND usr.role = "comedian"
-        AND usr.status = "active"
-    )
+//     AND EXISTS (
+//       SELECT 1
+//       FROM user_service_roles AS usr
+//       WHERE usr.user_id = c.user_id
+//         AND usr.service_key = "standup"
+//         AND usr.role = "comedian"
+//         AND usr.status = "active"
+//     )
 
-  ORDER BY c.created_at DESC, c.id DESC
+//   ORDER BY c.created_at DESC, c.id DESC
 
-  LIMIT 5
-');
+//   LIMIT 5
+// ');
 
 foreach ($stmt->fetchAll() as $row) {
-  $latest_comments[] = [
+  $latest_posts[] = [
     'comment_id' => (int) $row['id'],
     'comedian_id' => (string) $row['comedian_id'],
     'user_public_id' => $row['public_id'],
@@ -549,7 +549,7 @@ echo json_encode([
   'events' => $events,
   'past_events' => $past_events,
   'notices' => $notices,
-  'latest_comments' => $latest_comments,
+  'latest_posts' => $latest_posts,
   'limits' => [
     'upload_max_filesize' => getIniBytes('upload_max_filesize'),
     'post_max_size' => getIniBytes('post_max_size'),
