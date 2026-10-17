@@ -11,3 +11,4 @@
 
 - [初期表示](readme/api-init.md)
 - [ロール管理](readme/api-role.md)
+- [コメディアン投稿（つぶやき）仕様](readme/api-comedian-voices-spec.md)

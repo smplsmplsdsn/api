@@ -472,8 +472,8 @@ foreach ($stmt->fetchAll() as $row) {
   ];
 }
 
-// 最新コメント取得
-$latest_posts = [];
+// 最新一言取得
+$latest_voices = [];
 
 // $stmt = $pdo->query('
 //   SELECT
@@ -496,7 +496,7 @@ $latest_posts = [];
 //         PARTITION BY user_id
 //         ORDER BY created_at DESC, id DESC
 //       ) AS rn
-//     FROM standup_comments
+//     FROM standup_voices
 //     WHERE comedian_id IS NOT NULL
 //   ) AS c
 
@@ -525,8 +525,8 @@ $latest_posts = [];
 // ');
 
 foreach ($stmt->fetchAll() as $row) {
-  $latest_posts[] = [
-    'comment_id' => (int) $row['id'],
+  $latest_voices[] = [
+    'voice_id' => (int) $row['id'],
     'comedian_id' => (string) $row['comedian_id'],
     'user_public_id' => $row['public_id'],
     'name' => $row['name'],
@@ -549,7 +549,7 @@ echo json_encode([
   'events' => $events,
   'past_events' => $past_events,
   'notices' => $notices,
-  'latest_posts' => $latest_posts,
+  'latest_voices' => $latest_voices,
   'limits' => [
     'upload_max_filesize' => getIniBytes('upload_max_filesize'),
     'post_max_size' => getIniBytes('post_max_size'),

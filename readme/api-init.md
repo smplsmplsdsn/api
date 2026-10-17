@@ -18,7 +18,7 @@ src/services/standup/init.php
   "events": [],
   "past_events": [],
   "notices": [],
-  "latest_posts": []
+  "latest_voices": []
 }
 ```
 
@@ -567,7 +567,7 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 
 
 
-## 6. latest_posts
+## 6. latest_voices
 
 Standupのcomedianによる最新コメントを取得する。
 
@@ -579,7 +579,7 @@ Standupのcomedianによる最新コメントを取得する。
 
 ```json
 {
-  "comment_id": 10,
+  "voice_id": 10,
   "comedian_id": "6",
   "name": "8テストコメディアン",
   "thumbnail": "",
@@ -590,14 +590,14 @@ Standupのcomedianによる最新コメントを取得する。
 
 #### 各項目
 
-* `comment_id`
+* `voice_id`
 
-  * `standup_comments.id`
+  * `standup_voices.id`
   * 整数として返す。
 
 * `comedian_id`
 
-  * `standup_comments.comedian_id`
+  * `standup_voices.comedian_id`
   * `standup_comedians.id` を使用する。
   * APIでは文字列として返す。
 
@@ -617,11 +617,11 @@ Standupのcomedianによる最新コメントを取得する。
 
 * `text`
 
-  * `standup_comments.text`
+  * `standup_voices.text`
 
 * `created_at`
 
-  * `standup_comments.created_at`
+  * `standup_voices.created_at`
 
 #### 対象となるユーザー
 
@@ -642,7 +642,7 @@ Standupのcomedianによる最新コメントを取得する。
 
 対象ユーザーごとに取得した最新コメントを比較し、**最新コメントの新しい順に5ユーザー**を返す。
 
-そのため、同じユーザーが複数のコメントを投稿していても、`latest_posts` には最大1件しか登場しない。
+そのため、同じユーザーが複数のコメントを投稿していても、`latest_voices` には最大1件しか登場しない。
 コメント単位の最新5件ではない。
 
 #### 並び順

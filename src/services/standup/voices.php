@@ -85,7 +85,7 @@ try {
           comedian_id,
           text,
           created_at
-        FROM standup_comedian_posts
+        FROM standup_comedian_voices
         WHERE comedian_id = ?
           AND id > ?
         ORDER BY id DESC
@@ -96,7 +96,7 @@ try {
         $after_id
       ]);
 
-      $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      $voices = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     } elseif ($before_id !== null) {
 
@@ -107,7 +107,7 @@ try {
           comedian_id,
           text,
           created_at
-        FROM standup_comedian_posts
+        FROM standup_comedian_voices
         WHERE comedian_id = ?
           AND id < ?
         ORDER BY id DESC
@@ -119,9 +119,9 @@ try {
         $before_id
       ]);
 
-      $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-      $has_more = count($posts) > $limit;
-      $posts = array_slice($posts, 0, $limit);
+      $voices = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      $has_more = count($voices) > $limit;
+      $voices = array_slice($voices, 0, $limit);
 
     } else {
 
@@ -132,7 +132,7 @@ try {
           comedian_id,
           text,
           created_at
-        FROM standup_comedian_posts
+        FROM standup_comedian_voices
         WHERE comedian_id = ?
         ORDER BY id DESC
         LIMIT ' . ($limit + 1)
@@ -140,15 +140,15 @@ try {
 
       $stmt->execute([$comedian_id]);
 
-      $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      $voices = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-      $has_more = count($posts) > $limit;
+      $has_more = count($voices) > $limit;
 
-      $posts = array_slice($posts, 0, $limit);
+      $voices = array_slice($voices, 0, $limit);
     }
 
     // IDの型を統一
-    foreach ($posts as &$post) {
+    foreach ($voices as &$post) {
       $post['id'] = (int) $post['id'];
       $post['comedian_id'] = (int) $post['comedian_id'];
     }
@@ -158,7 +158,7 @@ try {
 
     echo json_encode([
       'success' => true,
-      'posts' => $posts,
+      'voices' => $voices,
       'has_more' => $has_more
     ], JSON_UNESCAPED_UNICODE);
 
@@ -229,7 +229,7 @@ try {
 
   // つぶやきの登録
   $stmt = $pdo->prepare('
-    INSERT INTO standup_comedian_posts (
+    INSERT INTO standup_comedian_voices (
       comedian_id,
       text
     ) VALUES (?, ?)
@@ -242,7 +242,7 @@ try {
 
   echo json_encode([
     'success' => true,
-    'post_id' => (int) $pdo->lastInsertId(),
+    'voice_id' => (int) $pdo->lastInsertId(),
   ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
