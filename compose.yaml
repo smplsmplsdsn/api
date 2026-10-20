@@ -27,6 +27,7 @@ services:
       - ./.env:/var/www/.env:ro
       - ./src:/var/www/html
       - ./app:/var/www/app
+      - ./vendor:/var/www/vendor
       - ./php.ini:/usr/local/etc/php/conf.d/custom.ini:ro
 
   mysql:

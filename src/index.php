@@ -307,7 +307,7 @@ if ($path === '/auth/google/callback') {
 
 
 /**
- * サービス固有API
+ * API
  */
 $serviceAction = trim($path, '/');
 
@@ -316,26 +316,36 @@ if (
   preg_match('/^[a-zA-Z0-9_-]+$/', $serviceAction)
 ) {
 
+  // サービス固有APIを検索
   $serviceKey = $_GET['service']
     ?? $_POST['service']
-    ?? 'demo';
+    ?? '';
 
   $serviceKey = trim((string) $serviceKey);
 
-  if ($serviceKey === '') {
-    http_response_code(400);
-    exit('サービス情報がありません');
+  if ($serviceKey !== '') {
+
+    if (!isValidServiceKey($serviceKey)) {
+      http_response_code(400);
+      exit('無効なサービスです');
+    }
+
+    $serviceFile = __DIR__
+      . '/services/'
+      . $serviceKey
+      . '/'
+      . $serviceAction
+      . '.php';
+
+    if (is_file($serviceFile)) {
+      require $serviceFile;
+      exit;
+    }
   }
 
-  if (!isValidServiceKey($serviceKey)) {
-    http_response_code(400);
-    exit('無効なサービスです');
-  }
-
+  // 共通APIを検索
   $serviceFile = __DIR__
     . '/services/'
-    . $serviceKey
-    . '/'
     . $serviceAction
     . '.php';
 

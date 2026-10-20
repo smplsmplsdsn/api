@@ -17,3 +17,8 @@ $serviceRedirectProduction = [
 $serviceRedirectLocal = [
   'standup' => 'http://localhost:8090/',
 ];
+
+$serviceNames = [
+  'demo' => 'Demo',
+  'standup' => 'Standup Spot',
+];
