@@ -45,10 +45,46 @@ function hasActiveRole(
 /**
  * comedianがactiveか確認する
  */
-function isActiveComedian (
+function isActiveComedianById (
+  PDO $pdo,
+  $comedian_id
+): bool {
+
+  // 値が1以上の整数か確認する
+  $comedian_id = filter_var(
+    $comedian_id,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1]]
+  );
+
+  if ($comedian_id === false) {
+    return false;
+  }
+
+  $stmt = $pdo->prepare('
+    SELECT 1
+    FROM standup_comedians
+    WHERE id = ?
+      AND status = ?
+    LIMIT 1
+  ');
+
+  $stmt->execute([
+    $comedian_id,
+    'active',
+  ]);
+
+  return (bool) $stmt->fetchColumn();
+}
+
+
+/**
+ * activeなcomedianのIDを取得する
+ */
+function getActiveComedianId (
   PDO $pdo,
   $user_id
-): bool {
+): ?int {
 
   if (!hasActiveRole(
     $pdo,
@@ -56,11 +92,11 @@ function isActiveComedian (
     'standup',
     'comedian'
   )) {
-    return false;
+    return null;
   }
 
   $stmt = $pdo->prepare('
-    SELECT 1
+    SELECT id
     FROM standup_comedians
     WHERE user_id = ?
       AND status = ?
@@ -72,7 +108,11 @@ function isActiveComedian (
     'active',
   ]);
 
-  return (bool) $stmt->fetchColumn();
+  $comedian_id = $stmt->fetchColumn();
+
+  return $comedian_id !== false
+    ? (int) $comedian_id
+    : null;
 }
 
 

@@ -244,6 +244,7 @@ try {
   ];
 
   // GET: 参加表明している候補情報取得
+  // 読み込み後、コメディアンアカウントを無効から有効にした最初のみ
   if (($_GET['is_candidate_info'] ?? '') === 'true') {
 
     $stmt = $pdo->prepare('
@@ -260,7 +261,7 @@ try {
       $user_id,
     ]);
 
-    $response['registered_candidates'] = array_map(
+    $response['comedian']['registered_candidates'] = array_map(
       'strval',
       $stmt->fetchAll(PDO::FETCH_COLUMN)
     );

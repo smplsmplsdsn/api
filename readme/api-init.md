@@ -18,7 +18,7 @@ src/services/standup/init.php
   "events": [],
   "past_events": [],
   "notices": [],
-  "latest_comments": []
+  "latest_voices": []
 }
 ```
 
@@ -567,11 +567,11 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 
 
 
-## 6. latest_comments
+## 6. latest_voices
 
-Standupのcomedianによる最新コメントを取得する。
+Standupのcomedianによる最新一言を取得する。
 
-**最新5件のコメントではなく、「最新コメントを持つ有効なcomedianユーザーのうち、最新の5ユーザー」**を返す。
+**最新5件の一言ではなく、「最新一言を持つ有効なcomedianユーザーのうち、最新の5ユーザー」**を返す。
 
 1ユーザーにつき1件だけ表示する。
 
@@ -579,9 +579,8 @@ Standupのcomedianによる最新コメントを取得する。
 
 ```json
 {
-  "comment_id": 10,
+  "voice_id": 10,
   "comedian_id": "6",
-  "user_public_id": "8",
   "name": "8テストコメディアン",
   "thumbnail": "",
   "text": "皆さんに楽しんでもらえるライブにします！",
@@ -591,20 +590,20 @@ Standupのcomedianによる最新コメントを取得する。
 
 #### 各項目
 
-* `comment_id`
+* `voice_id`
 
-  * `standup_comments.id`
+  * `standup_voices.id`
   * 整数として返す。
 
 * `comedian_id`
 
-  * `standup_comments.comedian_id`
+  * `standup_voices.comedian_id`
   * `standup_comedians.id` を使用する。
   * APIでは文字列として返す。
 
 * `user_public_id`
 
-  * コメント投稿者の `users.public_id`
+  * 一言投稿者の `users.public_id`
   * `users.id` はAPIに出さない。
 
 * `name`
@@ -618,11 +617,11 @@ Standupのcomedianによる最新コメントを取得する。
 
 * `text`
 
-  * `standup_comments.text`
+  * `standup_voices.text`
 
 * `created_at`
 
-  * `standup_comments.created_at`
+  * `standup_voices.created_at`
 
 #### 対象となるユーザー
 
@@ -631,24 +630,24 @@ Standupのcomedianによる最新コメントを取得する。
 1. `users.status = "active"`
 2. `user_service_roles` に `service_key = "standup"`、`role = "comedian"`、`status = "active"` のロールを持つ
 3. `standup_comedians` に該当ユーザーの `status = "active"` のレコードが存在する
-4. `comedian_id` が設定されたコメントを1件以上持つ
+4. `comedian_id` が設定された一言を1件以上持つ
 
-つまり、**Standupのcomedianとして有効なユーザーが投稿したコメントのみを対象とする。**
+つまり、**Standupのcomedianとして有効なユーザーが投稿した一言のみを対象とする。**
 
 #### 1ユーザーにつき最新1件
 
-対象ユーザーごとに、`comedian_id` が設定されたコメントの中から最新の1件だけを取得する。
+対象ユーザーごとに、`comedian_id` が設定された一言の中から最新の1件だけを取得する。
 
 #### 表示件数
 
-対象ユーザーごとに取得した最新コメントを比較し、**最新コメントの新しい順に5ユーザー**を返す。
+対象ユーザーごとに取得した最新一言を比較し、**最新一言の新しい順に5ユーザー**を返す。
 
-そのため、同じユーザーが複数のコメントを投稿していても、`latest_comments` には最大1件しか登場しない。
-コメント単位の最新5件ではない。
+そのため、同じユーザーが複数の一言を投稿していても、`latest_voices` には最大1件しか登場しない。
+一言単位の最新5件ではない。
 
 #### 並び順
 
-各ユーザーの最新コメントを取得した後、そのコメントの
+各ユーザーの最新一言を取得した後、その一言の
 
 1. `created_at` の新しい順
 2. `id` の大きい順
@@ -657,7 +656,7 @@ Standupのcomedianによる最新コメントを取得する。
 
 #### comedian情報について
 
-`name` と `thumbnail` はコメント投稿者の `users` 情報ではなく、`standup_comedians` の情報を使用する。
+`name` と `thumbnail` は一言投稿者の `users` 情報ではなく、`standup_comedians` の情報を使用する。
 
-`user_public_id` はコメント投稿者の `users.public_id` を使用する。
+`user_public_id` は一言投稿者の `users.public_id` を使用する。
 
