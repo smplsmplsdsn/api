@@ -17,7 +17,6 @@ src/services/standup/init.php
   "venues": [],
   "events": [],
   "past_events": [],
-  "notices": [],
   "latest_voices": []
 }
 ```
@@ -517,146 +516,106 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 
 
 
+## 5. latest_voices
 
+Standupの有効な comedian による最新一言を取得する。
 
-## 5. notices
+**最新の一言を持つ有効な comedian のうち、最新の10人を返す。**
 
-`standup_notices` から、現在有効な（`status = "active"`）お知らせを取得して返す。
+1人の comedian につき1件だけ表示する。
 
-#### レスポンス
-
-```json id="0j5k7m"
-{
-  "date": "2026.8.19",
-  "link": "https://xxx",
-  "text": "Standup Spotからのお知らせです。"
-}
-```
-
-#### 各項目
-
-* `date`
-
-  * `standup_notices.date`
-  * APIでは `YYYY.M.D` 形式で返す。
-  * 例：`2026-08-19` → `"2026.8.19"`
-
-* `link`
-
-  * `standup_notices.link`
-  * リンクが設定されている場合はURLを返す。
-  * リンクが設定されていない場合は `null` を返す。
-
-* `text`
-
-  * `standup_notices.text`
-
-#### 取得条件
-
-`standup_notices.status = "active"` のお知らせのみ返す。
-
-#### 並び順
-
-以下の順で返す。
-
-1. `date` の新しい順
-2. `date` が同じ場合は `id` の大きい順
-
-そのため、同じ日付のお知らせが複数ある場合は、登録された新しいお知らせが先になる。
-
-
-
-
-## 6. latest_voices
-
-Standupのcomedianによる最新一言を取得する。
-
-**最新5件の一言ではなく、「最新一言を持つ有効なcomedianユーザーのうち、最新の5ユーザー」**を返す。
-
-1ユーザーにつき1件だけ表示する。
-
-#### レスポンス
+### レスポンス
 
 ```json
 {
-  "voice_id": 10,
+  "voice_id": 18,
   "comedian_id": "6",
-  "name": "8テストコメディアン",
+  "is_me": true,
+  "name": "テストコメディアン",
   "thumbnail": "",
   "text": "皆さんに楽しんでもらえるライブにします！",
-  "created_at": "2026-10-06 10:35:00"
+  "created_at": "2026-10-21 21:47:48"
 }
 ```
 
-#### 各項目
+### 各項目
 
-* `voice_id`
+- `voice_id`
+  - `standup_comedian_voices.id`
+  - 整数として返す。
 
-  * `standup_voices.id`
-  * 整数として返す。
+- `comedian_id`
+  - `standup_comedian_voices.comedian_id`
+  - `standup_comedians.id` を使用する。
+  - APIでは文字列として返す。
 
-* `comedian_id`
+- `is_me`
+  - 現在ログインしているユーザー自身の一言かどうかを表す。
+  - `standup_comedians.user_id` と、ログインユーザーの内部IDである `users.id` が一致する場合は `true`。
+  - それ以外は `false`。
+  - 未ログインの場合は `false`。
+  - APIレスポンスには `users.id` を含めない。
 
-  * `standup_voices.comedian_id`
-  * `standup_comedians.id` を使用する。
-  * APIでは文字列として返す。
+- `name`
+  - `standup_comedians.name`
+  - `users.nickname` は使用しない。
 
-* `user_public_id`
+- `thumbnail`
+  - `standup_comedians.thumbnail`
 
-  * 一言投稿者の `users.public_id`
-  * `users.id` はAPIに出さない。
+- `text`
+  - `standup_comedian_voices.text`
 
-* `name`
+- `created_at`
+  - `standup_comedian_voices.created_at`
 
-  * `standup_comedians.name`
-  * `users.nickname` は使用しない。
+### 対象となる comedian
 
-* `thumbnail`
+以下の条件をすべて満たす comedian を対象とする。
 
-  * `standup_comedians.thumbnail`
+1. `users.status = "active"` である。
+2. `user_service_roles` に `service_key = "standup"`、`role = "comedian"`、`status = "active"` のロールを持つ。
+3. `user_service_roles` に `service_key = "standup"`、`role = "member"`、`status = "active"` のロールを持つ。
+4. `standup_comedians.status = "active"` である。
+5. `standup_comedian_voices` に一言を1件以上持つ。
 
-* `text`
+対象となる一言は、`standup_comedian_voices.comedian_id` から `standup_comedians` を特定し、そのプロフィールに紐づくものとする。
 
-  * `standup_voices.text`
+### 1人につき最新1件
 
-* `created_at`
+各 comedian について、`standup_comedian_voices` から最新の一言を1件だけ取得する。
 
-  * `standup_voices.created_at`
-
-#### 対象となるユーザー
-
-以下をすべて満たすユーザーを対象とする。
-
-1. `users.status = "active"`
-2. `user_service_roles` に `service_key = "standup"`、`role = "comedian"`、`status = "active"` のロールを持つ
-3. `standup_comedians` に該当ユーザーの `status = "active"` のレコードが存在する
-4. `comedian_id` が設定された一言を1件以上持つ
-
-つまり、**Standupのcomedianとして有効なユーザーが投稿した一言のみを対象とする。**
-
-#### 1ユーザーにつき最新1件
-
-対象ユーザーごとに、`comedian_id` が設定された一言の中から最新の1件だけを取得する。
-
-#### 表示件数
-
-対象ユーザーごとに取得した最新一言を比較し、**最新一言の新しい順に5ユーザー**を返す。
-
-そのため、同じユーザーが複数の一言を投稿していても、`latest_voices` には最大1件しか登場しない。
-一言単位の最新5件ではない。
-
-#### 並び順
-
-各ユーザーの最新一言を取得した後、その一言の
+最新の判定は以下の順とする。
 
 1. `created_at` の新しい順
-2. `id` の大きい順
+2. `created_at` が同じ場合は `id` の大きい順
 
-で並べ、上位5ユーザーを返す。
+### 表示件数
 
-#### comedian情報について
+各 comedian の最新一言を取得した後、最新一言の新しい順に最大10人を返す。
 
-`name` と `thumbnail` は一言投稿者の `users` 情報ではなく、`standup_comedians` の情報を使用する。
+同じ comedian が複数の一言を投稿していても、`latest_voices` には最大1件しか登場しない。
 
-`user_public_id` は一言投稿者の `users.public_id` を使用する。
+### 並び順
+
+`latest_voices` は以下の順で返す。
+
+1. `created_at` の新しい順
+2. `created_at` が同じ場合は `voice_id`（`standup_comedian_voices.id`）の大きい順
+
+### 本人判定
+
+`is_me` は、ログインユーザーの `users.id` と `standup_comedians.user_id` を比較して判定する。
+
+- 本人の一言：`true`
+- 他の comedian の一言：`false`
+- 未ログイン時：`false`
+
+`users.id` は内部識別子として使用し、APIレスポンスには公開しない。
+
+### comedian 情報
+
+`name` と `thumbnail` は `users` の情報ではなく、`standup_comedians` の情報を使用する。
+
+投稿者の公開IDである `user_public_id` はレスポンスに含めない。
 

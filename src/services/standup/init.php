@@ -449,92 +449,81 @@ foreach ($stmt->fetchAll() as $row) {
   ];
 }
 
-// お知らせ取得
-$notices = [];
-
-$stmt = $pdo->query('
-  SELECT
-    date,
-    link,
-    text
-  FROM standup_notices
-  WHERE status = "active"
-  ORDER BY date DESC, id DESC
-');
-
-foreach ($stmt->fetchAll() as $row) {
-  $date = new DateTime($row['date']);
-
-  $notices[] = [
-    'date' => $date->format('Y.n.j'),
-    'link' => $row['link'],
-    'text' => $row['text'],
-  ];
-}
-
 // 最新一言取得
 $latest_voices = [];
 
-// $stmt = $pdo->query('
-//   SELECT
-//     c.id,
-//     c.comedian_id,
-//     u.public_id,
-//     sc.name,
-//     sc.thumbnail,
-//     c.text,
-//     c.created_at
+$stmt = $pdo->query('
+  SELECT
+    sv.id,
+    sv.comedian_id,
+    sc.user_id,
+    sc.name,
+    sc.thumbnail,
+    sv.text,
+    sv.created_at
 
-//   FROM (
-//     SELECT
-//       id,
-//       user_id,
-//       comedian_id,
-//       text,
-//       created_at,
-//       ROW_NUMBER() OVER (
-//         PARTITION BY user_id
-//         ORDER BY created_at DESC, id DESC
-//       ) AS rn
-//     FROM standup_voices
-//     WHERE comedian_id IS NOT NULL
-//   ) AS c
+  FROM standup_comedian_voices AS sv
 
-//   INNER JOIN users AS u
-//     ON u.id = c.user_id
+  INNER JOIN standup_comedians AS sc
+    ON sc.id = sv.comedian_id
+    AND sc.status = "active"
 
-//   INNER JOIN standup_comedians AS sc
-//     ON sc.id = c.comedian_id
+  INNER JOIN users AS u
+    ON u.id = sc.user_id
+    AND u.status = "active"
 
-//   WHERE c.rn = 1
-//     AND u.status = "active"
-//     AND sc.status = "active"
+  WHERE EXISTS (
+    SELECT 1
+    FROM user_service_roles AS usr
+    WHERE usr.user_id = u.id
+      AND usr.service_key = "standup"
+      AND usr.role = "comedian"
+      AND usr.status = "active"
+  )
 
-//     AND EXISTS (
-//       SELECT 1
-//       FROM user_service_roles AS usr
-//       WHERE usr.user_id = c.user_id
-//         AND usr.service_key = "standup"
-//         AND usr.role = "comedian"
-//         AND usr.status = "active"
-//     )
+  AND EXISTS (
+    SELECT 1
+    FROM user_service_roles AS usr
+    WHERE usr.user_id = u.id
+      AND usr.service_key = "standup"
+      AND usr.role = "member"
+      AND usr.status = "active"
+  )
 
-//   ORDER BY c.created_at DESC, c.id DESC
+  AND NOT EXISTS (
+    SELECT 1
+    FROM standup_comedian_voices AS newer
+    WHERE newer.comedian_id = sv.comedian_id
+      AND (
+        newer.created_at > sv.created_at
+        OR (
+          newer.created_at = sv.created_at
+          AND newer.id > sv.id
+        )
+      )
+  )
 
-//   LIMIT 5
-// ');
+  ORDER BY
+    sv.created_at DESC,
+    sv.id DESC
 
-foreach ($stmt->fetchAll() as $row) {
+  LIMIT 10
+');
+
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
   $latest_voices[] = [
     'voice_id' => (int) $row['id'],
     'comedian_id' => (string) $row['comedian_id'],
-    'user_public_id' => $row['public_id'],
+    'is_me' => $logged_in
+      && $user_id !== null
+      && (int) $row['user_id'] === (int) $user_id,
     'name' => $row['name'],
     'thumbnail' => $row['thumbnail'],
     'text' => $row['text'],
     'created_at' => $row['created_at'],
   ];
 }
+
 
 echo json_encode([
   'login' => [
@@ -548,7 +537,6 @@ echo json_encode([
   'venues' => $venues,
   'events' => $events,
   'past_events' => $past_events,
-  'notices' => $notices,
   'latest_voices' => $latest_voices,
   'limits' => [
     'upload_max_filesize' => getIniBytes('upload_max_filesize'),
