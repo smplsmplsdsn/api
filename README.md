@@ -9,6 +9,8 @@
 # サービス共通 API
 
 - [フィードバック](readme/api-feedback.md)
+- [Stations API](readme/api-stations.md)
+
 
 # Standup API
 

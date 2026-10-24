@@ -8,6 +8,7 @@ $allowedOrigins = [
 $allowedServices = [
   'demo',
   'standup',
+  'stations',
 ];
 
 $serviceRedirectProduction = [
@@ -21,4 +22,5 @@ $serviceRedirectLocal = [
 $serviceNames = [
   'demo' => 'Demo',
   'standup' => 'Standup Spot',
+  'stations' => 'Station',
 ];

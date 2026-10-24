@@ -1,4 +1,9 @@
 <?php
+$target_dir = [
+  '000_common',
+  '001_standup',
+  '101_stations'
+];
 
 $envFile = __DIR__ . '/../.env';
 $sqlDir = __DIR__ . '/../app/database';
@@ -23,48 +28,51 @@ function getConfigValue($key, $env) {
   return null;
 }
 
-try {
+/**
+ * 指定ディレクトリ内のSQLファイルを実行する
+ */
+function createTable($dir_type, $sqlDir, $env) {
+  $targetDir = $sqlDir . '/' . $dir_type;
+
+  if (!is_dir($targetDir)) {
+    throw new RuntimeException(
+      "SQL directory not found: {$targetDir}"
+    );
+  }
+
   /*
-   * .env が存在する場合は読み込む。
-   * Docker環境などで存在しない場合は、
-   * Docker Composeから渡された環境変数を使用する。
+   * DB接続先を切り替える
    */
-  $env = [];
+  switch ($dir_type) {
+    case '101_stations':
+      $host = getConfigValue('STATIONS_DB_HOST', $env);
+      $database = getConfigValue('STATIONS_DB_NAME', $env);
+      $user = getConfigValue('STATIONS_DB_USER', $env);
+      $password = getConfigValue('STATIONS_DB_PASSWORD', $env);
+      break;
 
-  if (file_exists($envFile)) {
-    $parsedEnv = parse_ini_file($envFile);
-
-    if ($parsedEnv === false) {
-      throw new RuntimeException('Failed to read .env file.');
-    }
-
-    $env = $parsedEnv;
+    default:
+      $host = getConfigValue('MYSQL_HOST', $env);
+      $database = getConfigValue('MYSQL_DATABASE', $env);
+      $user = getConfigValue('MYSQL_USER', $env);
+      $password = getConfigValue('MYSQL_PASSWORD', $env);
+      break;
   }
 
-  $database = getConfigValue('MYSQL_DATABASE', $env);
-  $user = getConfigValue('MYSQL_USER', $env);
-  $password = getConfigValue('MYSQL_PASSWORD', $env);
-
-  if (!$database || !$user || !$password) {
+  if (!$host || !$database || !$user || $password === null) {
     throw new RuntimeException(
-      'Database configuration is not set.'
-    );
-  }
-
-  if (!is_dir($sqlDir)) {
-    throw new RuntimeException(
-      "SQL directory not found: {$sqlDir}"
+      "Database configuration is not set: {$dir_type}"
     );
   }
 
   /*
-   * databaseディレクトリ内のSQLファイルを再帰的に取得
+   * SQLファイルを取得してファイル名順に並べる
    */
   $sqlFiles = [];
 
   $iterator = new RecursiveIteratorIterator(
     new RecursiveDirectoryIterator(
-      $sqlDir,
+      $targetDir,
       FilesystemIterator::SKIP_DOTS
     )
   );
@@ -75,30 +83,15 @@ try {
     }
   }
 
-  // 実行順を統一
-  sort($sqlFiles);
-
-  if (empty($sqlFiles)) {
-    exit('ERROR: No SQL files found.');
-  }
-
-  /*
-   * ファイル名順に並べる
-   */
   sort($sqlFiles, SORT_STRING);
 
-  /*
-   * DB接続
-   *
-   * Dockerでは mysql
-   * 本番では環境に応じたMYSQL_HOSTを設定できるようにする。
-   */
-  $host = getConfigValue('MYSQL_HOST', $env);
-
-  if (!$host) {
-    $host = 'mysql';
+  if (empty($sqlFiles)) {
+    throw new RuntimeException(
+      "No SQL files found: {$targetDir}"
+    );
   }
 
+  // DB接続
   $pdo = new PDO(
     "mysql:host={$host};dbname={$database};charset=utf8mb4",
     $user,
@@ -109,7 +102,7 @@ try {
     ]
   );
 
-  echo "Database setup started.\n\n";
+  echo "Database setup started: {$dir_type}\n";
 
   foreach ($sqlFiles as $sqlFile) {
     $fileName = basename($sqlFile);
@@ -126,7 +119,42 @@ try {
     echo "OK: {$fileName}\n";
   }
 
-  echo "\nDatabase setup completed.\n";
+  echo "Database setup completed: {$dir_type}\n\n";
+}
+
+try {
+
+  // .env の読み込み
+  $env = [];
+
+  if (file_exists($envFile)) {
+    $parsedEnv = parse_ini_file($envFile);
+
+    if ($parsedEnv === false) {
+      throw new RuntimeException(
+        'Failed to read .env file.'
+      );
+    }
+
+    $env = $parsedEnv;
+  }
+
+  // DBセットアップ
+  foreach ($target_dir as $dir) {
+    createTable($dir, $sqlDir, $env);
+  }
+
+  echo "All database setups completed.\n";
+
+  $self = __FILE__;
+
+  if (!unlink($self)) {
+    throw new RuntimeException(
+      'Database setup completed, but the setup file could not be deleted.'
+    );
+  }
+
+  echo "Setup file deleted.\n";
 } catch (Throwable $e) {
   http_response_code(500);
 
