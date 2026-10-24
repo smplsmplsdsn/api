@@ -52,5 +52,28 @@ services:
     depends_on:
       - mysql
 
+  stations-mysql:
+    image: mysql:8.4
+    container_name: stations-mysql
+    environment:
+      MYSQL_DATABASE: ${STATIONS_DB_NAME}
+      MYSQL_USER: ${STATIONS_DB_USER}
+      MYSQL_PASSWORD: ${STATIONS_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${STATIONS_DB_ROOT_PASSWORD}
+    volumes:
+      - stations_data:/var/lib/mysql
+
+  stations-phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: stations-phpmyadmin
+    ports:
+      - "8087:80"
+    environment:
+      PMA_HOST: stations-mysql
+      PMA_PORT: 3306
+    depends_on:
+      - stations-mysql
+
 volumes:
   mysql_data:
+  stations_data:

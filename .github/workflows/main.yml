@@ -24,6 +24,7 @@ jobs:
             **/.git*
             **/.git*/**
             docker/**
+            readme/**
             .env.example
             compose.yaml
             Dockerfile

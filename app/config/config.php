@@ -123,3 +123,33 @@ function getIniBytes(string $key): int {
   return $size;
 }
 
+
+/**
+ * 駅データベース接続を作成する
+ */
+function createStationsDatabaseConnection() {
+
+  global $env;
+
+  $host = getConfigValue('STATIONS_DB_HOST', $env);
+  $database = getConfigValue('STATIONS_DB_NAME', $env);
+  $user = getConfigValue('STATIONS_DB_USER', $env);
+  $password = getConfigValue('STATIONS_DB_PASSWORD', $env);
+  $port = getConfigValue('STATIONS_DB_PORT', $env) ?: '3306';
+
+  if (!$host || !$database || !$user || !$password) {
+    throw new RuntimeException(
+      'Stations database configuration is not set.'
+    );
+  }
+
+  return new PDO(
+    "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4",
+    $user,
+    $password,
+    [
+      PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+      PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]
+  );
+}
