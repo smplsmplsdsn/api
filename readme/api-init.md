@@ -1,14 +1,14 @@
-# Standup：初期表示APIの仕様書
+# Standup：初期表示API仕様書
 
-
-## /init?service=standup の役割
+## `/init?service=standup` の役割
 
 Standupサイトの初期表示に必要な情報を、1回のAPIリクエストでまとめてJSONとして返す。
 
-対象ファイル：
-src/services/standup/init.php
+**対象ファイル：**
 
-レスポンス構成：
+`src/services/standup/init.php`
+
+### レスポンス構成
 
 ```json
 {
@@ -16,10 +16,12 @@ src/services/standup/init.php
   "comedians": [],
   "venues": [],
   "events": [],
-  "past_events": [],
-  "latest_voices": []
+  "latest_voices": [],
+  "limits": {}
 }
 ```
+
+---
 
 ## 1. login
 
@@ -31,13 +33,24 @@ Standupサービスにおける現在のログイン状態と、ログインユ�
 
 をもとに判定する。
 
-#### レスポンス
+### member権限による制限
+
+セッションにユーザーIDが存在する場合、`hasActiveMember()` によってStandupの有効なmember権限を確認する。
+
+有効なmember権限がない場合は、以下の処理を行う。
+
+- ログインユーザーIDを `null` にする。
+- `is_account_limited` を `true` にする。
+- ログアウト状態として以降の処理を行う。
+
+### レスポンス
 
 ログイン中：
 
 ```json
 {
   "logged_in": true,
+  "is_account_limited": false,
   "user_public_id": "01XXXXXXXXXXXXXXX",
   "nickname": "...",
   "profiles": [
@@ -52,62 +65,100 @@ Standupサービスにおける現在のログイン状態と、ログインユ�
 ```json
 {
   "logged_in": false,
+  "is_account_limited": false,
   "user_public_id": "",
   "nickname": "",
   "profiles": []
 }
 ```
 
-#### 各項目
+アカウント制限中：
 
-* `logged_in`
+```json
+{
+  "logged_in": false,
+  "is_account_limited": true,
+  "user_public_id": "",
+  "nickname": "",
+  "profiles": []
+}
+```
 
-  * Standupのログイン状態。
-  * セッションに保存されたユーザーが存在し、`users.status = "active"` の場合 `true`。
-  * それ以外は `false`。
+### 各項目
 
-* `user_public_id`
+#### `logged_in`
 
-  * ログインユーザーの `users.public_id`。
-  * 外部からユーザーを識別するために使用する。
-  * ログアウト中は `""`。
+- Standupのログイン状態。
+- セッションに保存されたユーザーが存在し、`users.status = "active"` であり、有効なmember権限を持つ場合 `true`。
+- それ以外は `false`。
 
-* `nickname`
+#### `is_account_limited`
 
-  * ログインユーザーの `users.nickname`。
-  * ログアウト中は `""`。
+- Standupにおいてアカウントが制限されているかを表す。
+- セッションにユーザーIDが存在するものの、`hasActiveMember()` が `false` を返した場合 `true`。
+- それ以外は `false`。
 
-* `profiles`
+#### `user_public_id`
 
-  * `user_service_roles` から、`service_key = "standup"` かつ `status = "active"` のロールを取得する。
-  * 複数のロールを持つ場合は配列で返す。
-  * ログアウト中は `[]`。
+- ログインユーザーの `users.public_id`。
+- ログアウト中およびアカウント制限中は `""`。
 
-#### Standup comedian の判定
+#### `nickname`
 
-Standupにおける comedian としての有効状態は、以下の両方を満たす場合とする。
+- ログインユーザーの `users.nickname`。
+- ログアウト中およびアカウント制限中は `""`。
 
-1. `profiles` に `"comedian"` が含まれる
-2. `standup_comedians` に該当ユーザーのレコードが存在し、`status = "active"` である
+#### `profiles`
+
+- `user_service_roles` から、以下の条件に一致するロールを取得する。
+  - `service_key = "standup"`
+  - `status = "active"`
+- 複数のロールを持つ場合は配列で返す。
+- ログアウト中およびアカウント制限中は `[]`。
+
+### Standup comedian の判定
+
+Standupにおける有効なcomedianとしての状態は、以下の両方を満たす場合とする。
+
+1. `profiles` に `"comedian"` が含まれる。
+2. `standup_comedians` に該当ユーザーのレコードが存在し、`status = "active"` である。
 
 この判定結果は `login` レスポンスには直接含めない。
 
-ただし、この判定は以下の情報の表示条件として使用する。
+### Standup venue_manager の判定
 
-* `events[].message_for_comedian`
-* `venues[].message_for_comedian`
-* 日時未定のイベント候補の表示
+有効なvenue_managerとしての状態は、`profiles` に `"venue_manager"` が含まれる場合とする。
 
-なお、`users.id` は内部識別子として使用するが、APIレスポンスでは公開しない。
+ただし、venue_managerの有効性は、会場ごとの管理者登録状況とは別に扱う。
 
+### 内部IDについて
+
+`users.id` は内部識別子として使用するが、APIレスポンスでは公開しない。
+
+---
 
 ## 2. comedians
 
-`standup_comedians` に登録されているコメディアン情報を返す。
+`standup_comedians` に登録されている有効なコメディアン情報を返す。
 
-`standup_comedians.status = "active"` のコメディアンを対象とする。
+### 取得条件
 
-#### レスポンス
+以下のすべてを満たすコメディアンを対象とする。
+
+1. `standup_comedians.status = "active"`
+2. 紐づく `users.status = "active"`
+3. `user_service_roles` に以下の有効なロールが存在する。
+   - `service_key = "standup"`
+   - `role = "member"`
+   - `status = "active"`
+4. `user_service_roles` に以下の有効なロールが存在する。
+   - `service_key = "standup"`
+   - `role = "comedian"`
+   - `status = "active"`
+
+取得順は `standup_comedians.id` の昇順。
+
+### レスポンス
 
 ```json
 {
@@ -116,10 +167,6 @@ Standupにおける comedian としての有効状態は、以下の両方を満
   "thumbnail": "",
   "status": "active",
   "is_me": true,
-  "registered_candidates": [
-    "7",
-    "8"
-  ],
   "socialmedia": {
     "instagram": "",
     "tiktok": "",
@@ -129,47 +176,38 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 }
 ```
 
-#### 各項目
+### 各項目
 
-* `id`
+#### `id`
 
-  * `standup_comedians.id`
-  * APIでは文字列として返す。
-  * `standup_comedians.id` は外部に公開して問題ないIDとして扱う。
-  * `users.id` は使用しない。
+- `standup_comedians.id`
+- APIでは文字列として返す。
+- 外部に公開可能なIDとして扱う。
 
-* `name`
+#### `name`
 
-  * `standup_comedians.name`
+- `standup_comedians.name`
 
-* `thumbnail`
+#### `thumbnail`
 
-  * `standup_comedians.thumbnail`
+- `standup_comedians.thumbnail`
 
-* `status`
+#### `status`
 
-  * `standup_comedians.status`
-  * `active` のコメディアンのみ返す。
+- `standup_comedians.status`
+- 取得対象は `active` のみ。
 
-* `is_me`
+#### `is_me`
 
-  * 現在ログインしているユーザー自身のコメディアンプロフィールかどうかを表す。
-  * ログインユーザーの `users.id` と、`standup_comedians.user_id` が一致する場合 `true`。
-  * それ以外は `false`。
-  * 未ログインの場合はすべて `false`。
+- 現在ログインしているユーザー自身のコメディアンプロフィールかどうかを表す。
+- ログインユーザーの `users.id` と `standup_comedians.user_id` が一致する場合 `true`。
+- それ以外は `false`。
+- 未ログインの場合はすべて `false`。
 
-* `registered_candidates`
+#### `socialmedia`
 
-  * そのコメディアンが出演登録されている `standup_event_candidates.id` の一覧。
-  * APIでは文字列として返す。
-  * イベントが `events` に含まれる候補だけでなく、`past_events` に含まれる候補も対象とする。
-  * 出演登録がない場合は `[]`。
-  * 同じ候補IDは重複して返さない。
-
-* `socialmedia`
-
-  * `standup_comedians` に登録されているSNS情報。
-  * 以下のキーを固定で返す。
+- `standup_comedians` に登録されているSNS情報。
+- 以下のキーを固定で返す。
 
 ```json
 {
@@ -180,78 +218,78 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 }
 ```
 
-#### SNS情報
+各値は対応するDBカラムの値をそのまま返す。
 
-各値は `standup_comedians` の対応するカラムをそのまま返す。
+### コメディアンIDについて
 
-未設定の場合は現在のDB定義により `""` を返す。
-
-#### コメディアンIDについて
-
-`standup_comedians.id` はAPIで公開可能なIDとして扱う。
+`standup_comedians.id` は公開可能なIDとして扱う。
 
 一方、`standup_comedians.user_id` は `users.id` を参照する内部IDのため、APIレスポンスには出さない。
 
+### registered_candidates について
 
+現在の実装では `registered_candidates` は返さない。
 
+---
 
 ## 3. venues
 
-`standup_venues` に登録されている会場情報を返す。
+`standup_venues` に登録されている有効な会場情報を返す。
 
-イベントで現在使用されているかどうかに関係なく、`standup_venues` に登録されている会場をすべて対象とする。
+### 取得条件
 
-#### レスポンス
+- `standup_venues.status = "active"`
+- イベント候補との関連有無は取得条件に影響しない。
+
+取得順は `standup_venues.id` の降順。
+
+### レスポンス
 
 ```json
 {
-  "id": 1,
+  "id": "1",
   "name": "テスト会場A",
   "address": "東京都渋谷区テスト1-1-1",
   "latlng": {
     "lat": 35.658034,
     "lng": 139.701636
   },
-  "stations": [
-    {
-      "line": "JR山手線",
-      "name": "渋谷駅",
-      "distance": 5
-    }
-  ],
+  "stations": [],
   "socialmedia": {
-    "instagram": "https://instagram.com/test_a",
+    "instagram": "",
     "tiktok": "",
     "youtube": "",
-    "x": "https://x.com/test_a"
+    "x": ""
   },
   "message": "一般向けテストメッセージ",
   "message_for_comedian": "コメディアン向けテストメッセージ",
+  "managers": [
+    "01XXXXXXXXXXXXXXX"
+  ],
   "status": "active"
 }
 ```
 
-#### 各項目
+### 各項目
 
-* `id`
+#### `id`
 
-  * `standup_venues.id`
-  * 会場を識別するID。
-  * APIでは整数として返す。
+- `standup_venues.id`
+- APIでは文字列として返す。
 
-* `name`
+#### `name`
 
-  * `standup_venues.name`
+- `standup_venues.name`
 
-* `address`
+#### `address`
 
-  * `standup_venues.address`
+- `standup_venues.address`
 
-* `latlng`
+#### `latlng`
 
-  * 会場の緯度・経度。
-  * `latitude` / `longitude` をAPIでは `lat` / `lng` として返す。
-  * 緯度または経度が未設定の場合は `null`。
+- `latitude` / `longitude` を `lat` / `lng` として返す。
+- 各値は数値型に変換する。
+- 未設定の場合は `null`。
 
 ```json
 {
@@ -260,15 +298,14 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 }
 ```
 
-* `stations`
+#### `stations`
 
-  * `standup_venues.stations` に保存されているJSONを配列として返す。
-  * 未設定の場合は `[]`。
+- `standup_venues.stations` に保存されているJSONを配列として返す。
+- 未設定の場合は `[]`。
 
-* `socialmedia`
+#### `socialmedia`
 
-  * 会場に登録されているSNS情報。
-  * 以下のキーを固定で返す。
+以下のキーを固定で返す。
 
 ```json
 {
@@ -279,50 +316,66 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 }
 ```
 
-* 各値は `standup_venues` の対応するカラムをそのまま返す。
+各値は `standup_venues` の対応するカラムをそのまま返す。
 
-* 未設定の場合は `""`。
+#### `message`
 
-* `message`
+- 一般ユーザー向けの会場メッセージ。
+- `standup_venues.message` を返す。
 
-  * 一般ユーザー向けの会場メッセージ。
-  * `standup_venues.message` を返す。
+#### `message_for_comedian`
 
-* `message_for_comedian`
+以下のいずれかを満たす場合に `standup_venues.message_for_comedian` を返す。
 
-  * comedian向けの会場メッセージ。
-  * ログインユーザーが有効なStandup comedianの場合は `standup_venues.message_for_comedian` を返す。
-  * それ以外の場合は `""`。
+1. ログインユーザーが有効なStandup comedianである。
+2. ログインユーザーが該当会場の有効なvenue_managerである。
 
-* `status`
+それ以外の場合は `""`。
 
-  * `standup_venues.status`
+#### `managers`
 
-#### comedian向け情報の表示条件
+- 該当会場に登録されている有効な管理者の `users.public_id` 一覧。
+- 以下のすべてを満たす管理者を対象とする。
+  - `standup_venue_managers.status = "active"`
+  - `user_service_roles.service_key = "standup"`
+  - `user_service_roles.role = "venue_manager"`
+  - `user_service_roles.status = "active"`
+  - `users.status = "active"`
+- APIでは `users.public_id` を文字列配列として返す。
+- 該当する管理者がいない場合は `[]`。
 
-`message_for_comedian` を表示するには、ログインユーザーが以下の両方を満たす必要がある。
+#### `status`
 
-1. `user_service_roles` に `service_key = "standup"`、`role = "comedian"`、`status = "active"` のロールを持つ
-2. `standup_comedians` に該当ユーザーの `status = "active"` のレコードが存在する
+- `standup_venues.status`
 
-条件を満たさない場合は、`message_for_comedian` を `""` とする。
+### 会場管理者本人の判定
 
-#### 会場の取得条件
+ログインユーザーの `user_public_id` が `managers` に含まれる場合、その会場の管理者本人と判定する。
 
-`standup_venues` に登録されているすべての会場を取得する。
+この判定は `message_for_comedian` の表示条件にも使用する。
 
-イベント候補との関連有無は、会場の取得条件には影響しない。
+### 内部IDについて
 
+会場管理者の判定には内部の `users.id` を使用するが、APIレスポンスの `managers` には `users.public_id` のみを返す。
+
+---
 
 ## 4. events
 
-`standup_events`、`standup_event_candidates`、`standup_event_candidate_comedians` を使用して、Standupのイベント情報を返す。
+`standup_events`、`standup_event_candidates`、`standup_event_candidate_comedians` を使用して、現在開催中または未来のイベント情報を返す。
 
-1つのイベントに対して複数の日時場所を候補として登録できる。
+現在の実装では、過去のイベント情報は取得しない。
 
-候補ごとに開催日時を判定し、現在開催中・未来の候補を `events`、過去の候補を `past_events` に分けて返す。
+### 取得方法
 
-#### イベントのレスポンス
+- `standup_events` を基準に取得する。
+- `standup_event_candidates` を `LEFT JOIN` で取得する。
+- イベントは `standup_events.id` の降順。
+- 同一イベント内の候補は `standup_event_candidates.id` の昇順。
+
+イベントの `status` による取得制限は行わない。
+
+### イベントのレスポンス
 
 ```json
 {
@@ -339,61 +392,64 @@ Standupにおける comedian としての有効状態は、以下の両方を満
 }
 ```
 
-#### イベント各項目
+### イベント各項目
 
-* `id`
+#### `id`
 
-  * `standup_events.id`
+- `standup_events.id`
+- 整数として返す。
 
-* `creator_public_id`
+#### `creator_public_id`
 
-  * イベント作成者の `users.public_id`。
-  * `standup_events.creator_public_id` を返す。
-  * `users.id` はAPIに出さない。
+- `standup_events.creator_public_id`
+- イベント作成者の `users.public_id`。
+- 内部IDである `users.id` は公開しない。
 
-* `type`
+#### `type`
 
-  * `standup_events.type`
+- `standup_events.type`
 
-* `name`
+#### `name`
 
-  * `standup_events.name`
+- `standup_events.name`
 
-* `message`
+#### `message`
 
-  * `standup_events.message`
+- `standup_events.message`
 
-* `message_for_comedian`
+#### `message_for_comedian`
 
-  * `standup_events.message_for_comedian`
-  * ログインユーザーが有効なStandup comedianの場合のみ返す。
-  * それ以外の場合は `""`。
+以下のいずれかを満たす場合に `standup_events.message_for_comedian` を返す。
 
-* `image`
+1. ログインユーザーが有効なStandup comedianである。
+2. ログインユーザーがイベントの作成者本人である。
 
-  * `standup_events.image`
+それ以外の場合は `""`。
 
-* `status`
+#### `image`
 
-  * `standup_events.status`
-  * イベントの状態を表す。
-  * `/init` APIでは `status` の値による表示・非表示の判定は行わない。
-  * DBに保存されている値をそのまま返す。
-  * `status` の具体的な値や用途はイベント管理側の仕様で定義する。
+- `standup_events.image`
 
-* `confirmed_candidate_id`
+#### `status`
 
-  * `standup_events.confirmed_candidate_id`
-  * 確定している候補がある場合はその `candidate.id`。
-  * 未確定の場合は `null`。
+- `standup_events.status`
+- DBに保存されている値をそのまま返す。
+- `/init` APIでは `status` による表示・非表示の判定は行わない。
 
-* `candidates`
+#### `confirmed_candidate_id`
 
-  * イベントに登録されている候補一覧。
-  * 候補ごとに表示条件を判定する。
-  * 表示対象となる候補が複数ある場合は、すべて配列で返す。
+- `standup_events.confirmed_candidate_id`
+- 値が存在する場合は整数として返す。
+- 未確定の場合は `null`。
 
-#### 候補のレスポンス
+#### `candidates`
+
+- イベントに登録されている候補一覧。
+- 候補ごとに表示条件を判定する。
+- 表示対象となる候補を配列として返す。
+- 表示対象の候補がないイベントは返さない。
+
+### 候補のレスポンス
 
 ```json
 {
@@ -402,127 +458,99 @@ Standupにおける comedian としての有効状態は、以下の両方を満
   "open_at": "2026-10-18 18:00:00",
   "start_at": "2026-10-18 19:00:00",
   "fee": "1000円",
-  "comedian_ids": [
-    "1"
-  ]
+  "comedian_ids": []
 }
 ```
 
-#### 候補各項目
+### 候補各項目
 
-* `id`
+#### `id`
 
-  * `standup_event_candidates.id`
-  * 整数として返す。
+- `standup_event_candidates.id`
+- 整数として返す。
 
-* `venue_id`
+#### `venue_id`
 
-  * `standup_event_candidates.venue_id`
-  * APIでは文字列として返す。
-  * 会場が未設定の場合は `null`。
+- `standup_event_candidates.venue_id`
+- APIでは文字列として返す。
+- 会場未設定の場合は `null`。
 
-* `open_at`
+#### `open_at`
 
-  * `standup_event_candidates.open_at`
-  * 未設定の場合は `null`。
+- `standup_event_candidates.open_at`
+- 未設定の場合は `null`。
 
-* `start_at`
+#### `start_at`
 
-  * `standup_event_candidates.start_at`
-  * 未設定の場合は `null`。
+- `standup_event_candidates.start_at`
+- 未設定の場合は `null`。
 
-* `fee`
+#### `fee`
 
-  * `standup_event_candidates.fee`
-  * 未設定の場合は `""`。
+- `standup_event_candidates.fee`
+- 未設定の場合は `""`。
 
-* `comedian_ids`
+#### `comedian_ids`
 
-  * `standup_event_candidate_comedians.comedian_id` の一覧。
-  * `standup_comedians.id` を使用する。
-  * `users.public_id` は使用しない。
-  * APIでは文字列として返す。
-  * 出演登録がない場合は `[]`。
+- `standup_event_candidate_comedians.comedian_id` の一覧。
+- `standup_comedians.id` を使用する。
+- APIでは文字列として返す。
+- 出演登録がない場合は `[]`。
+- 現在の実装では、コメディアンやユーザーの `status` による絞り込みは行わない。
+- 登録テーブルの `id` の昇順で取得する。
 
-#### events と past_events
-
-レスポンスには以下の2つの配列を持つ。
-
-```json
-{
-  "events": [],
-  "past_events": []
-}
-```
-
-`events` は現在開催中または未来の候補、`past_events` は過去の候補を含むイベント。
-
-候補単位で判定するため、1つのイベントに過去と未来の候補が混在している場合、同じイベントが `events` と `past_events` の両方に含まれることがある。
-
-各配列では、候補が1件も残らないイベントは返さない。
-
-#### 候補の日時判定
+### 候補の日時判定
 
 候補の判定日時は以下のルールで決定する。
 
-1. `start_at` が設定されている場合は `start_at`
-2. `start_at` が未設定で `open_at` が設定されている場合は `open_at`
-3. 両方が未設定の場合は「日時未定」
-
-判定日時が現在日時以前の場合は `past_events` に含める。
+1. `start_at` が設定されている場合は `start_at`。
+2. `start_at` が未設定で `open_at` が設定されている場合は `open_at`。
+3. 両方が未設定の場合は日時未定。
 
 判定日時が現在日時より後の場合は `events` に含める。
 
-#### 日時未定の候補
+判定日時が現在日時以前の場合は取得対象外とする。
 
-`start_at` と `open_at` の両方が未設定の候補は、以下の両方を満たす場合のみ `events` に表示する。
+### 日時未定の候補
 
-1. ログインユーザーがイベントの作成者本人
-2. ログインユーザーが有効なStandup comedian
+`start_at` と `open_at` の両方が未設定の候補は、以下のすべてを満たす場合のみ `events` に表示する。
+
+1. ログインユーザーである。
+2. ログインユーザーがイベントの作成者本人である。
+3. ログインユーザーが有効なStandup comedian、または有効なvenue_managerである。
 
 それ以外の場合は表示しない。
 
-#### comedian向け情報
+### 出演コメディアン
 
-`message_for_comedian` を表示する条件は、ログイン情報におけるStandup comedian判定と同じ。
+候補に出演登録されている `comedian_id` を取得する。
 
-以下の両方を満たす場合に `message_for_comedian` を返す。
+- `standup_event_candidate_comedians.comedian_id` を使用する。
+- `standup_comedians.id` を文字列として返す。
+- `users.id` や `users.public_id` は使用しない。
+- 現在の実装では、有効・無効状態による絞り込みは行わない。
 
-1. `user_service_roles` に `service_key = "standup"`、`role = "comedian"`、`status = "active"` のロールを持つ
-2. `standup_comedians` に該当ユーザーの `status = "active"` のレコードが存在する
+### イベントの表示条件まとめ
 
-条件を満たさない場合は `""` を返す。
+| 候補の日時 | 表示条件 |
+|---|---|
+| 未来 | 全ユーザーに表示 |
+| 現在日時以前 | 表示しない |
+| 日時未定 | 作成者本人かつ有効なcomedianまたはvenue_manager |
 
-#### 出演コメディアン
+なお、1つのイベントに複数の候補が存在する場合、表示条件を満たす候補のみを返す。
 
-候補に出演登録されているコメディアンを `comedian_ids` として返す。
+候補が1件も残らないイベントは返さない。
 
-出演登録の取得時には、
-
-* `standup_comedians.status = "active"`
-* 紐付く `users.status = "active"`
-
-の両方を満たすコメディアンを対象とする。
-
-`comedian_ids` は `standup_comedians.id` を文字列として返す。
-
-出演登録がない場合は `[]`。
-
-#### イベントの並び順
-
-イベントは `standup_events.id` の降順で取得する。
-
-同一イベント内の候補は `standup_event_candidates.id` の昇順で処理する。
-
-
+---
 
 ## 5. latest_voices
 
-Standupの有効な comedian による最新一言を取得する。
+Standupの有効なcomedianによる最新一言を取得する。
 
-**最新の一言を持つ有効な comedian のうち、最新の10人を返す。**
+**最新の一言を持つ有効なcomedianのうち、最新の10人を返す。**
 
-1人の comedian につき1件だけ表示する。
+1人のcomedianにつき1件だけ表示する。
 
 ### レスポンス
 
@@ -540,82 +568,157 @@ Standupの有効な comedian による最新一言を取得する。
 
 ### 各項目
 
-- `voice_id`
-  - `standup_comedian_voices.id`
-  - 整数として返す。
+#### `voice_id`
 
-- `comedian_id`
-  - `standup_comedian_voices.comedian_id`
-  - `standup_comedians.id` を使用する。
-  - APIでは文字列として返す。
+- `standup_comedian_voices.id`
+- 整数として返す。
 
-- `is_me`
-  - 現在ログインしているユーザー自身の一言かどうかを表す。
-  - `standup_comedians.user_id` と、ログインユーザーの内部IDである `users.id` が一致する場合は `true`。
-  - それ以外は `false`。
-  - 未ログインの場合は `false`。
-  - APIレスポンスには `users.id` を含めない。
+#### `comedian_id`
 
-- `name`
-  - `standup_comedians.name`
-  - `users.nickname` は使用しない。
+- `standup_comedian_voices.comedian_id`
+- `standup_comedians.id` を使用する。
+- APIでは文字列として返す。
 
-- `thumbnail`
-  - `standup_comedians.thumbnail`
+#### `is_me`
 
-- `text`
-  - `standup_comedian_voices.text`
+- ログインユーザーの `users.id` と `standup_comedians.user_id` が一致する場合 `true`。
+- それ以外は `false`。
+- 未ログインの場合は `false`。
 
-- `created_at`
-  - `standup_comedian_voices.created_at`
+#### `name`
 
-### 対象となる comedian
+- `standup_comedians.name`
+- `users.nickname` は使用しない。
 
-以下の条件をすべて満たす comedian を対象とする。
+#### `thumbnail`
 
-1. `users.status = "active"` である。
-2. `user_service_roles` に `service_key = "standup"`、`role = "comedian"`、`status = "active"` のロールを持つ。
-3. `user_service_roles` に `service_key = "standup"`、`role = "member"`、`status = "active"` のロールを持つ。
-4. `standup_comedians.status = "active"` である。
+- `standup_comedians.thumbnail`
+
+#### `text`
+
+- `standup_comedian_voices.text`
+
+#### `created_at`
+
+- `standup_comedian_voices.created_at`
+
+### 対象となるcomedian
+
+以下の条件をすべて満たすcomedianを対象とする。
+
+1. `users.status = "active"`。
+2. `user_service_roles` に以下の有効なロールが存在する。
+   - `service_key = "standup"`
+   - `role = "comedian"`
+   - `status = "active"`
+3. `user_service_roles` に以下の有効なロールが存在する。
+   - `service_key = "standup"`
+   - `role = "member"`
+   - `status = "active"`
+4. `standup_comedians.status = "active"`。
 5. `standup_comedian_voices` に一言を1件以上持つ。
-
-対象となる一言は、`standup_comedian_voices.comedian_id` から `standup_comedians` を特定し、そのプロフィールに紐づくものとする。
 
 ### 1人につき最新1件
 
-各 comedian について、`standup_comedian_voices` から最新の一言を1件だけ取得する。
+各comedianについて、`standup_comedian_voices` から最新の一言を1件だけ取得する。
 
 最新の判定は以下の順とする。
 
-1. `created_at` の新しい順
-2. `created_at` が同じ場合は `id` の大きい順
+1. `created_at` の新しい順。
+2. `created_at` が同じ場合は `id` の大きい順。
 
-### 表示件数
+### 表示件数・並び順
 
-各 comedian の最新一言を取得した後、最新一言の新しい順に最大10人を返す。
+- 各comedianの最新一言を取得した後、最大10人を返す。
+- `created_at` の新しい順。
+- `created_at` が同じ場合は `voice_id` の大きい順。
 
-同じ comedian が複数の一言を投稿していても、`latest_voices` には最大1件しか登場しない。
-
-### 並び順
-
-`latest_voices` は以下の順で返す。
-
-1. `created_at` の新しい順
-2. `created_at` が同じ場合は `voice_id`（`standup_comedian_voices.id`）の大きい順
+同じcomedianが複数の一言を投稿していても、最大1件しか登場しない。
 
 ### 本人判定
 
-`is_me` は、ログインユーザーの `users.id` と `standup_comedians.user_id` を比較して判定する。
-
-- 本人の一言：`true`
-- 他の comedian の一言：`false`
-- 未ログイン時：`false`
+`is_me` はログインユーザーの `users.id` と `standup_comedians.user_id` を比較して判定する。
 
 `users.id` は内部識別子として使用し、APIレスポンスには公開しない。
 
-### comedian 情報
+---
 
-`name` と `thumbnail` は `users` の情報ではなく、`standup_comedians` の情報を使用する。
+## 6. limits
 
-投稿者の公開IDである `user_public_id` はレスポンスに含めない。
+PHPのアップロード関連設定値を取得し、フロントエンドに返す。
 
+### レスポンス
+
+```json
+{
+  "upload_max_filesize": 104857600,
+  "post_max_size": 104857600
+}
+```
+
+### 各項目
+
+#### `upload_max_filesize`
+
+- PHPの `upload_max_filesize` の値。
+- `getIniBytes()` を使用してバイト数に変換する。
+
+#### `post_max_size`
+
+- PHPの `post_max_size` の値。
+- `getIniBytes()` を使用してバイト数に変換する。
+
+いずれも整数のバイト数として返す。
+
+---
+
+## 7. APIレスポンス全体
+
+最終的なレスポンス構成は以下のとおり。
+
+```json
+{
+  "login": {
+    "logged_in": true,
+    "is_account_limited": false,
+    "user_public_id": "01XXXXXXXXXXXXXXX",
+    "nickname": "テストユーザー",
+    "profiles": [
+      "member",
+      "comedian"
+    ]
+  },
+  "comedians": [],
+  "venues": [],
+  "events": [],
+  "latest_voices": [],
+  "limits": {
+    "upload_max_filesize": 104857600,
+    "post_max_size": 104857600
+  }
+}
+```
+
+---
+
+## 8. 実装上の補足・確認事項
+
+現在の実装における注意点をまとめる。
+
+| 項目 | 現在の実装 |
+|---|---|
+| `is_account_limited` | member権限がなければ `true` |
+| `users.status` が inactive の場合 | `logged_in = false`、`is_account_limited = false` |
+| イベントの `message_for_comedian` | 有効なcomedianまたはイベント作成者本人に表示 |
+| 会場の `message_for_comedian` | 有効なcomedianまたは該当会場の管理者に表示 |
+| 出演コメディアン | IDをそのまま取得。無効状態による絞り込みなし |
+| 日時未定候補 | 作成者本人かつ有効なcomedianまたはvenue_managerに表示 |
+| 過去イベント | 取得しない |
+| `registered_candidates` | 返さない |
+| `limits` | アップロード関連のPHP設定値を返す |
+
+### `is_account_limited` について
+
+現在の実装では、`is_account_limited` は厳密には「アカウント自体が無効か」ではなく、「有効なStandup member権限を持たないか」を表す。
+
+`users.status != "active"` の場合は `logged_in = false` となるが、`is_account_limited` は `true` にはならない。

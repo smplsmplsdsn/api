@@ -4,7 +4,7 @@ header('Content-Type: application/json; charset=UTF-8');
 require_once __DIR__ . '/../../../app/config/config.php';
 require_once __DIR__ . '/../../../app/functions/permissions.php';
 
-function comedianThumbnailError(string $message, int $status = 400) {
+function updateError(string $message, int $status = 400) {
   http_response_code($status);
 
   echo json_encode([
@@ -19,7 +19,7 @@ try {
 
   if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'POST'], true)) {
     header('Allow: GET, POST');
-    comedianThumbnailError('Method not allowed', 405);
+    updateError('Method not allowed', 405);
   }
 
   $pdo = createDatabaseConnection();
@@ -27,7 +27,7 @@ try {
   $user_id = $_SESSION['services']['standup']['user_id'] ?? null;
 
   if (!$user_id) {
-    comedianThumbnailError('Not logged in', 401);
+    updateError('Not logged in', 401);
   }
 
   // ユーザー確認
@@ -48,12 +48,12 @@ try {
   $user = $stmt->fetch();
 
   if (!$user) {
-    comedianThumbnailError('Invalid user', 401);
+    updateError('Invalid user', 401);
   }
 
   // コメディアン権限確認
   if (!hasActiveRole($pdo, $user_id, 'standup', 'comedian')) {
-    comedianThumbnailError('Comedian role is inactive', 403);
+    updateError('Comedian role is inactive', 403);
   }
 
   if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -82,7 +82,7 @@ try {
     $comedian = $stmt->fetch();
 
     if (!$comedian) {
-      comedianThumbnailError('Comedian profile not found', 404);
+      updateError('Comedian profile not found', 404);
     }
 
     $thumbnail = $comedian['thumbnail'];
@@ -223,7 +223,7 @@ try {
   $comedian = $stmt->fetch();
 
   if (!$comedian) {
-    comedianThumbnailError('Comedian profile not found(2)', 404);
+    updateError('Comedian profile not found(2)', 404);
   }
 
   // レスポンスデータ
@@ -271,5 +271,5 @@ try {
 
 } catch (Throwable $e) {
   error_log($e);
-  comedianThumbnailError('Internal server error', 500);
+  updateError('Internal server error', 500);
 }
