@@ -1,3 +1,4 @@
 .env
 .env.production
 /src/upload/**/*
+/src/setup_bk.php

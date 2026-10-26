@@ -129,9 +129,6 @@ $events = [];
 // 過去イベント
 $past_events = [];
 
-// イベントで使用する会場ID
-$venue_ids = [];
-
 // イベントで使用するコメディアンID
 $comedian_ids = [];
 
@@ -234,11 +231,6 @@ foreach ($rows as $row) {
       'fee' => $row['fee'],
       'comedian_ids' => [],
     ];
-  }
-
-  // 会場IDを記録
-  if ($row['venue_id'] !== null) {
-    $venue_ids[(string) $row['venue_id']] = true;
   }
 }
 
@@ -347,67 +339,81 @@ unset($event);
 $events = array_values($events);
 $past_events = array_values($past_events);
 
+
 // 会場取得
 $venues = [];
 
-if (count($venue_ids) > 0) {
-  $placeholders = implode(
-    ',',
-    array_fill(0, count($venue_ids), '?')
+$stmt = $pdo->query("
+  SELECT
+    v.id,
+    v.name,
+    v.address,
+    v.latitude,
+    v.longitude,
+    v.stations,
+    v.instagram,
+    v.tiktok,
+    v.youtube,
+    v.x,
+    v.message,
+    v.message_for_comedian,
+    v.status,
+    (
+      SELECT JSON_ARRAYAGG(u.public_id)
+      FROM standup_venue_managers vm
+      INNER JOIN users u
+        ON u.id = vm.user_id
+      WHERE vm.venue_id = v.id
+        AND vm.status = 'active'
+    ) AS managers
+  FROM standup_venues v
+  WHERE v.status = 'active'
+  ORDER BY v.id DESC
+");
+
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+  $managers = $row['managers'] !== null
+    ? json_decode($row['managers'], true)
+    : [];
+
+  $is_venue_manager = in_array(
+    $user_public_id,
+    $managers,
+    true
   );
 
-  $stmt = $pdo->prepare("
-    SELECT
-      id,
-      name,
-      address,
-      latitude,
-      longitude,
-      stations,
-      instagram,
-      tiktok,
-      youtube,
-      x,
-      message,
-      message_for_comedian,
-      status
-    FROM standup_venues
-    WHERE id IN ($placeholders)
-    ORDER BY id ASC
-  ");
-
-  $stmt->execute(array_keys($venue_ids));
-
-  foreach ($stmt->fetchAll() as $row) {
-    $venues[] = [
-      'id' => (int) $row['id'],
-      'name' => $row['name'],
-      'address' => $row['address'],
-      'latlng' => [
-        'lat' => $row['latitude'] !== null
-          ? (float) $row['latitude']
-          : null,
-        'lng' => $row['longitude'] !== null
-          ? (float) $row['longitude']
-          : null,
-      ],
-      'stations' => $row['stations'] !== null
-        ? json_decode($row['stations'], true)
-        : [],
-      'socialmedia' => [
-        'instagram' => $row['instagram'],
-        'tiktok' => $row['tiktok'],
-        'youtube' => $row['youtube'],
-        'x' => $row['x'],
-      ],
-      'message' => $row['message'],
-      'message_for_comedian' => $is_comedian
-        ? $row['message_for_comedian']
-        : '',
-      'status' => $row['status'],
-    ];
-  }
+  $venues[] = [
+    'id' => (string) $row['id'],
+    'name' => $row['name'],
+    'address' => $row['address'],
+    'latlng' => [
+      'lat' => $row['latitude'] !== null
+        ? (float) $row['latitude']
+        : null,
+      'lng' => $row['longitude'] !== null
+        ? (float) $row['longitude']
+        : null,
+    ],
+    'stations' => $row['stations'] !== null
+      ? json_decode($row['stations'], true)
+      : [],
+    'socialmedia' => [
+      'instagram' => $row['instagram'],
+      'tiktok' => $row['tiktok'],
+      'youtube' => $row['youtube'],
+      'x' => $row['x'],
+    ],
+    'message' => $row['message'],
+    'message_for_comedian' => ($is_comedian || $is_venue_manager)
+      ? $row['message_for_comedian']
+      : '',
+    'managers' => $row['managers'] !== null
+      ? json_decode($row['managers'], true)
+      : [],
+    'status' => $row['status'],
+  ];
 }
+
 
 // コメディアン取得
 $comedians = [];

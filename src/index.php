@@ -8,6 +8,22 @@ require_once __DIR__ . '/../app/config/config.php';
 require_once __DIR__ . '/../app/config/domains.php';
 require_once __DIR__ . '/../app/functions/ulid.php';
 
+/**
+ * エラー返却
+ */
+function apiError(string $message, int $status = 400): void {
+  http_response_code($status);
+
+  header('Content-Type: application/json; charset=UTF-8');
+
+  echo json_encode([
+    'success' => false,
+    'error' => $message,
+  ], JSON_UNESCAPED_UNICODE);
+
+  exit;
+}
+
 $is_secure = filter_var(getConfigValue('SESSION_COOKIE_SECURE', $env), FILTER_VALIDATE_BOOLEAN);
 
 session_set_cookie_params([
@@ -50,13 +66,11 @@ if ($path === '/auth/google') {
   $serviceKey = trim((string) $serviceKey);
 
   if ($serviceKey === '') {
-    http_response_code(400);
-    exit('サービス情報がありません');
+    apiError('サービス情報がありません');
   }
 
   if (!isValidServiceKey($serviceKey)) {
-    http_response_code(400);
-    exit('無効なサービスです');
+    apiError('無効なサービスです');
   }
 
   $state = bin2hex(random_bytes(16));
@@ -118,19 +132,15 @@ if ($path === '/auth/google/callback') {
   $redirectUrl = getRedirectUrl($serviceKey);
 
   if (!$redirectUrl) {
-    echo $redirectUrl;
-    http_response_code(400);
-    exit('リダイレクト先が設定されていません' . $serviceKey);
+    apiError('リダイレクト先が設定されていません');
   }
 
   if (!$serviceKey) {
-    http_response_code(400);
-    exit('サービス情報がありません');
+    apiError('サービス情報がありません');
   }
 
   if (!isValidServiceKey($serviceKey)) {
-    http_response_code(400);
-    exit('無効なサービスです');
+    apiError('無効なサービスです');
   }
 
   if (
@@ -140,7 +150,7 @@ if ($path === '/auth/google/callback') {
       $state
     )
   ) {
-    exit('Google OAuth error: state が一致しません');
+    apiError('Google OAuth error: state が一致しません');
   }
 
   if (!$code) {
@@ -169,7 +179,10 @@ if ($path === '/auth/google/callback') {
   $response = curl_exec($ch);
 
   if ($response === false) {
-    exit('Google OAuth error: ' . curl_error($ch));
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    apiError('Google OAuth error: ' . $error, 500);
   }
 
   curl_close($ch);
@@ -177,19 +190,19 @@ if ($path === '/auth/google/callback') {
   $token = json_decode($response, true);
 
   if (isset($token['error'])) {
-    exit('Google OAuth error: ' . $token['error']);
+    apiError('Google OAuth error: ' . $token['error']);
   }
 
   $idToken = $token['id_token'] ?? '';
 
   if (!$idToken) {
-    exit('Google OAuth error: id_token がありません');
+    apiError('Google OAuth error: id_token がありません');
   }
 
   $parts = explode('.', $idToken);
 
   if (count($parts) !== 3) {
-    exit('Google OAuth error: id_token の形式が不正です');
+    apiError('Google OAuth error: id_token の形式が不正です');
   }
 
   $payload = json_decode(
@@ -198,13 +211,13 @@ if ($path === '/auth/google/callback') {
   );
 
   if (!$payload) {
-    exit('Google OAuth error: id_token の解析に失敗しました');
+    apiError('Google OAuth error: id_token の解析に失敗しました');
   }
 
   $googleUserId = $payload['sub'] ?? '';
 
   if (!$googleUserId) {
-    exit('Google OAuth error: sub がありません');
+    apiError('Google OAuth error: sub がありません');
   }
 
   // DB接続
@@ -326,8 +339,7 @@ if (
   if ($serviceKey !== '') {
 
     if (!isValidServiceKey($serviceKey)) {
-      http_response_code(400);
-      exit('無効なサービスです');
+      apiError('無効なサービスです');
     }
 
     $serviceFile = __DIR__
@@ -368,21 +380,17 @@ if ($path === '/me') {
   $serviceKey = trim((string) $serviceKey);
 
   if ($serviceKey === '') {
-    http_response_code(400);
-    exit('サービス情報がありません');
+    apiError('サービス情報がありません');
   }
 
   if (!isValidServiceKey($serviceKey)) {
-    http_response_code(400);
-    exit('無効なサービスです');
+    apiError('無効なサービスです');
   }
 
   $userId = $_SESSION['services'][$serviceKey]['user_id'] ?? null;
 
   if (!$userId) {
-    http_response_code(401);
-    echo 'ログインしていません';
-    exit;
+    apiError('ログインしていません', 401);
   }
 
   $pdo = createDatabaseConnection();
@@ -419,9 +427,7 @@ if ($path === '/me') {
       $_SESSION['services'][$serviceKey]
     );
 
-    http_response_code(401);
-    echo 'ユーザーが存在しないか、サービスを利用できません';
-    exit;
+    apiError('ユーザーが存在しないか、サービスを利用できません', 401);
   }
 
   if ($user['status'] !== 'active') {
@@ -430,9 +436,7 @@ if ($path === '/me') {
       $_SESSION['services'][$serviceKey]
     );
 
-    http_response_code(401);
-    echo 'ユーザーが無効になっています';
-    exit;
+    apiError('ユーザーが無効になっています', 401);
   }
 
   header('Content-Type: application/json; charset=UTF-8');
@@ -458,8 +462,7 @@ if ($path === '/logout') {
   $redirectUrl = getRedirectUrl($serviceKey);
 
   if (!$redirectUrl) {
-    http_response_code(400);
-    exit('リダイレクト先が設定されていません');
+    apiError('リダイレクト先が設定されていません');
   }
 
   unset(
