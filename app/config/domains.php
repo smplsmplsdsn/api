@@ -12,11 +12,11 @@ $allowedServices = [
 ];
 
 $serviceRedirectProduction = [
-  'standup' => 'https://standupspot.com/',
+  'standup' => 'https://standupspot.com/?view=mypage',
 ];
 
 $serviceRedirectLocal = [
-  'standup' => 'http://localhost:8090/',
+  'standup' => 'http://localhost:8090/?view=mypage',
 ];
 
 $serviceNames = [

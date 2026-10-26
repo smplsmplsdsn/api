@@ -11,9 +11,10 @@
 - [フィードバック](readme/api-feedback.md)
 - [Stations API](readme/api-stations.md)
 
-
 # Standup API
 
 - [初期表示](readme/api-init.md)
 - [ロール管理](readme/api-role.md)
 - [コメディアンの一言 仕様](readme/api-comedian-voices-spec.md)
+- [場所の登録と編集](readme/api-venue.md)
+- [場所の削除](readme/api-venue-delete.md)
