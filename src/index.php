@@ -7,6 +7,7 @@
 require_once __DIR__ . '/../app/config/config.php';
 require_once __DIR__ . '/../app/config/domains.php';
 require_once __DIR__ . '/../app/functions/ulid.php';
+require_once __DIR__ . '/../app/functions/remember_token.php';
 
 /**
  * エラー返却
@@ -54,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
 
 /**
  * Google OAuth 開始
@@ -123,7 +125,6 @@ function ensureUserServiceRole(PDO $pdo, $userId, $serviceKey) {
  * Google OAuth callback
  */
 if ($path === '/auth/google/callback') {
-
 
   $code = $_GET['code'] ?? '';
   $state = $_GET['state'] ?? '';
@@ -253,6 +254,10 @@ if ($path === '/auth/google/callback') {
 
     $_SESSION['services'][$serviceKey]['user_id'] = $userId;
 
+    // Remember Token
+    deleteRememberToken($pdo);
+    createRememberToken($pdo, (int) $userId, $is_secure);
+
     header('Location: ' . $redirectUrl);
     exit;
   }
@@ -307,15 +312,52 @@ if ($path === '/auth/google/callback') {
 
     $_SESSION['services'][$serviceKey]['user_id'] = $userId;
 
+    // Remember Token
+    deleteRememberToken($pdo);
+    createRememberToken($pdo, (int) $userId, $is_secure);
+
     header('Location: ' . $redirectUrl);
+
   } catch (Throwable $e) {
 
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+      $pdo->rollBack();
+    }
 
     throw $e;
   }
 
   exit;
+}
+
+
+/**
+ * Remember Tokenによるログイン復元
+ *
+ * セッションが存在しない場合のみ実行
+ */
+if (
+  $path !== '/logout' &&
+  empty($_SESSION['services'][$_GET['service'] ?? $_POST['service'] ?? 'demo']['user_id']) &&
+  !empty($_COOKIE[REMEMBER_COOKIE_NAME])
+) {
+
+  $serviceKey = $_GET['service']
+    ?? $_POST['service']
+    ?? 'demo';
+
+  $serviceKey = trim((string) $serviceKey);
+
+  if ($serviceKey !== '' && isValidServiceKey($serviceKey)) {
+
+    $pdo = createDatabaseConnection();
+
+    restoreRememberToken(
+      $pdo,
+      $serviceKey,
+      $is_secure
+    );
+  }
 }
 
 
@@ -464,6 +506,12 @@ if ($path === '/logout') {
   if (!$redirectUrl) {
     apiError('リダイレクト先が設定されていません');
   }
+
+  // Remember Token
+  $pdo = createDatabaseConnection();
+
+  deleteRememberToken($pdo);
+  clearRememberCookie($is_secure);
 
   unset(
     $_SESSION['services'][$serviceKey]
