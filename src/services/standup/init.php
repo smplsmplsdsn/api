@@ -3,6 +3,12 @@ header('Content-Type: application/json; charset=UTF-8');
 
 require_once __DIR__ . '/../../../app/functions/permissions.php';
 
+// GETのみ許可
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+  header('Allow: GET');
+  exit;
+}
+
 $pdo = createDatabaseConnection();
 
 // ログインユーザー
@@ -156,8 +162,8 @@ $stmt = $pdo->query('
 
 $candidate_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 現在日時
-$now = new DateTime();
+// 今日
+$today = new DateTime('today');
 
 // 候補日
 $event_candidates = [];
@@ -192,7 +198,7 @@ foreach ($candidate_rows as $row) {
     }
 
   // 過去の場合は取得対象外
-  } elseif ($candidate_datetime <= $now) {
+  } elseif ($candidate_datetime < $today) {
     continue;
   }
 
@@ -272,6 +278,11 @@ $stmt = $pdo->query("
         AND r.service_key = 'standup'
         AND r.role = 'venue_manager'
         AND r.status = 'active'
+      INNER JOIN user_service_roles mr
+        ON mr.user_id = vm.user_id
+        AND mr.service_key = 'standup'
+        AND mr.role = 'member'
+        AND mr.status = 'active'
       INNER JOIN users u
         ON u.id = vm.user_id
         AND u.status = 'active'

@@ -109,6 +109,11 @@ function getVenue(PDO $pdo, int $venue_id): ?array {
       AND r.service_key = "standup"
       AND r.role = "venue_manager"
       AND r.status = "active"
+    INNER JOIN user_service_roles mr
+      ON mr.user_id = vm.user_id
+      AND mr.service_key = "standup"
+      AND mr.role = "member"
+      AND mr.status = "active"
     INNER JOIN users u
       ON u.id = vm.user_id
       AND u.status = "active"
@@ -159,6 +164,11 @@ function hasActiveVenueManagers(
       AND r.service_key = "standup"
       AND r.role = "venue_manager"
       AND r.status = "active"
+    INNER JOIN user_service_roles mr
+      ON mr.user_id = vm.user_id
+      AND mr.service_key = "standup"
+      AND mr.role = "member"
+      AND mr.status = "active"
     INNER JOIN users u
       ON u.id = vm.user_id
       AND u.status = "active"

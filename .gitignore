@@ -2,4 +2,5 @@
 .env.production
 /src/upload/**/*
 /src/setup_bk.php
+/src/todo.php
 /src/services/log/*

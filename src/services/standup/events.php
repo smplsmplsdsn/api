@@ -15,6 +15,12 @@ function updateError(string $message, int $status = 400): void {
   exit;
 }
 
+// GETのみ許可
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+  header('Allow: GET');
+  exit;
+}
+
 $pdo = createDatabaseConnection();
 
 // ログインユーザーを確認
@@ -129,8 +135,8 @@ $stmt = $pdo->query('
 
 $candidate_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 現在日時
-$now = new DateTime();
+// 今日
+$today = new DateTime('today');
 
 // 候補日
 $event_candidates = [];
@@ -165,7 +171,7 @@ foreach ($candidate_rows as $row) {
     }
 
   // 過去の場合は取得対象外
-  } elseif ($candidate_datetime <= $now) {
+  } elseif ($candidate_datetime < $today) {
     continue;
   }
 

@@ -259,11 +259,6 @@ try {
     $stmt->execute([
       $user_id,
     ]);
-
-    $response['comedian']['registered_candidates'] = array_map(
-      'strval',
-      $stmt->fetchAll(PDO::FETCH_COLUMN)
-    );
   }
 
   echo json_encode($response, JSON_UNESCAPED_UNICODE);

@@ -44,9 +44,6 @@ if (
 $service_name = $serviceNames[$service_key];
 
 // ご意見を取得
-$message = trim($input['message'] ?? '');
-
-// 入力チェック
 $message = $input['message'] ?? '';
 
 if (!is_string($message)) {

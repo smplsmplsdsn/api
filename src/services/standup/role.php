@@ -16,6 +16,13 @@ function updateError(string $message, int $status = 400) {
 }
 
 try {
+
+  // POSTのみ許可
+  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Allow: POST');
+    exit;
+  }
+
   $pdo = createDatabaseConnection();
 
   // ログイン状態の確認
