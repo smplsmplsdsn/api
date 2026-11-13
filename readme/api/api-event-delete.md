@@ -107,7 +107,7 @@ HTTP 200
 |---|---|---|
 | 400 | `Invalid JSON` | JSONが不正、または配列として解釈できない |
 | 400 | `Invalid event ID` | イベントIDが不正、または1以上の整数ではない |
-| 401 | `Unauthorized` | セッションにユーザーIDが存在しない、またはユーザーが存在しない |
+| 401 | `Unauthorized` | セッションにユーザーIDが存在しない、またはユーザーが存在しない・`inactive` である |
 | 403 | `Permission denied` | イベント作成者本人ではない |
 | 404 | `Event not found` | 削除対象のイベントが存在しない |
 | 405 | `Method not allowed` | POST以外のメソッド |

@@ -293,7 +293,7 @@ try {
   echo json_encode([
     'success' => true,
     'voice_id' => (int) $pdo->lastInsertId(),
-    'comedian_id' => $comedian_id,
+    'comedian_id' => (string) $comedian_id,
     'created_at' => date('Y-m-d H:i:s'),
   ], JSON_UNESCAPED_UNICODE);
 

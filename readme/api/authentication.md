@@ -11,8 +11,8 @@ Google OAuthによるログインを行い、PHPセッションとRemember Token
 | Endpoint | Method | Description |
 |---|---|---|
 | `/auth/google` | GET / POST | Google OAuth認証開始 |
-| `/auth/google/callback` | GET | Google OAuthコールバック |
-| `/me` | GET | ログインユーザー情報取得 |
+| `/auth/google/callback` | GET / POST | Google OAuthコールバック |
+| `/me` | GET / POST | ログインユーザー情報取得 |
 | `/logout` | GET / POST | ログアウト |
 
 ## 1. Google OAuth

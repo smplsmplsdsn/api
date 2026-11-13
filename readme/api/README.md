@@ -1,4 +1,4 @@
-# Standup Spot API Documentation
+# Standup Spot API
 
 Standup Spot API のエンドポイント、共通仕様、認証・権限管理に関するドキュメント。
 
@@ -30,22 +30,22 @@ HTTPメソッド、パラメータ、認証条件などは各API仕様書を参�
 
 ### Authentication
 
-| Endpoint | Method | Description | Documentation |
+| Endpoint | Method | 概略 | 仕様書 |
 |---|---|---|---|
-| `/auth/google` | GET | Google OAuth認証開始 | [authentication.md](./authentication.md) |
-| `/auth/google/callback` | GET | Google OAuthコールバック | [authentication.md](./authentication.md) |
-| `/me` | GET | ログインユーザー情報取得 | [authentication.md](./authentication.md) |
-| `/logout` | GET | ログアウト | [authentication.md](./authentication.md) |
+| `/auth/google` | GET / POST | Google OAuth認証開始 | [authentication.md](./authentication.md) |
+| `/auth/google/callback` | GET / POST | Google OAuthコールバック | [authentication.md](./authentication.md) |
+| `/me` | GET / POST | ログインユーザー情報取得 | [authentication.md](./authentication.md) |
+| `/logout` | GET / POST | ログアウト | [authentication.md](./authentication.md) |
 
 ### Standup
 
-| Endpoint | Method | Description | Documentation |
+| Endpoint | Method | 概略 | 仕様書 |
 |---|---|---|---|
 | `/init` | GET | 初期表示情報取得 | [api-init.md](./api-init.md) |
 | `/role` | POST | ロール管理 | [api-role.md](./api-role.md) |
 | `/comedian` | GET / POST | コメディアン情報取得・更新 | [api-comedian.md](./api-comedian.md) |
 | `/comedian_thumbnail` | POST | コメディアンサムネイル更新 | [api-comedian-thumbnail.md](./api-comedian-thumbnail.md) |
-| `/comedian_voices` | GET / POST | コメディアンの声取得・投稿 | [api-comedian-voices.md](./api-comedian-voices.md) |
+| `/comedian_voices` | GET / POST | コメディアンの一言取得・投稿 | [api-comedian-voices.md](./api-comedian-voices.md) |
 | `/event` | POST | イベント登録・編集 | [api-event.md](./api-event.md) |
 | `/event_delete` | POST | イベント削除 | [api-event-delete.md](./api-event-delete.md) |
 | `/events` | GET | イベント・候補情報取得 | [api-events.md](./api-events.md) |
@@ -59,12 +59,17 @@ HTTPメソッド、パラメータ、認証条件などは各API仕様書を参�
 
 ### Other APIs
 
-| Endpoint | Method | Description | Documentation |
+| Endpoint | Method | 概略 | 仕様書 |
 |---|---|---|---|
 | `/stations` | GET | 周辺駅情報取得 | [api-stations.md](./api-stations.md) |
 | `/feedback` | POST | フィードバック送信 | [api-feedback.md](./api-feedback.md) |
 
 ## Common Specifications
+
+### 初期取得とイベント再取得
+
+`/init` は画面の初期表示に必要なログイン情報、コメディアン、会場、イベント、候補日、一言などをまとめて返す。`/events` はイベント・候補日の情報を再取得するためのAPIで、イベントの作成・更新後など、初期表示データ全体の再取得が不要な場面で利用する。両APIにイベント関連の取得内容があるのは用途の違いによるものであり、どちらも各APIの取得条件に従う。
+
 
 ### HTTP Methods
 
@@ -90,6 +95,17 @@ JSONを返すAPIでは、UTF-8を使用する。
 
 エラー時のレスポンス形式は、各APIの実装に従う。
 
+### Date and Time Handling
+
+APIで扱う日時の形式およびタイムゾーンの解釈は、各エンドポイントの実装と個別仕様書に従う。
+
+- 現行APIの日時文字列を、タイムゾーン付きISO 8601形式に一律変更することはしない。
+- `YYYY-MM-DD HH:MM:SS` 形式など、タイムゾーンを明示しない日時文字列は、文字列だけからUTCまたは日本時間と断定できない。
+- 日時の保存・取得・比較では、PHPとMySQLのタイムゾーン設定および対象カラムの型に注意する。
+- イベントの開場日時・開始日時は `DATETIME` カラムで管理する。作成日時・更新日時などの型は各テーブルの定義に従う。
+
+日時形式やタイムゾーンの取り扱いを変更する場合は、APIの入出力および利用側への影響を確認したうえで、実装と仕様書を合わせて更新する。
+
 ### Authentication
 
 ログイン状態はPHPセッションで管理する。
@@ -110,7 +126,7 @@ Standupサービスで使用する主なロール：
 
 ロールの有効条件や各APIの利用条件は、それぞれの仕様書に記載する。
 
-## Documentation Policy
+## 仕様書ポリシー
 
 API仕様書は現在のPHP実装を正として作成する。
 

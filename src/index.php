@@ -524,3 +524,7 @@ if ($path === '/logout') {
 
 echo 'API OK<br>';
 echo 'MySQL OK<br>';
+
+echo date_default_timezone_get();
+echo "\n";
+echo date('Y-m-d H:i:s');

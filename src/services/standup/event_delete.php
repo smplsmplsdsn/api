@@ -37,6 +37,7 @@ try {
     SELECT public_id
     FROM users
     WHERE id = :id
+      AND status = "active"
     LIMIT 1
   ');
 

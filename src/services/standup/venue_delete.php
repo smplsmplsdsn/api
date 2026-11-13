@@ -114,9 +114,22 @@ try {
   // 有効な担当管理者がいるか確認
   $stmt = $pdo->prepare('
     SELECT 1
-    FROM standup_venue_managers
-    WHERE venue_id = :venue_id
-      AND status = "active"
+    FROM standup_venue_managers vm
+    INNER JOIN user_service_roles r
+      ON r.user_id = vm.user_id
+      AND r.service_key = "standup"
+      AND r.role = "venue_manager"
+      AND r.status = "active"
+    INNER JOIN user_service_roles mr
+      ON mr.user_id = vm.user_id
+      AND mr.service_key = "standup"
+      AND mr.role = "member"
+      AND mr.status = "active"
+    INNER JOIN users u
+      ON u.id = vm.user_id
+      AND u.status = "active"
+    WHERE vm.venue_id = :venue_id
+      AND vm.status = "active"
     LIMIT 1
   ');
 

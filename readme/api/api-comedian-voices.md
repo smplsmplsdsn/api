@@ -14,6 +14,9 @@
 
 ## GET：一言取得
 
+このGETは指定コメディアンの投稿履歴を取得する。`/init` の `latest_voices` は有効なユーザー・`member`/`comedian` ロール・プロフィールに基づく初期表示用の公開一覧であり、取得対象の判定が異なる。POSTの登録・削除はログイン中の本人に限定され、GETとは別の権限判定を行う。
+
+
 ### リクエスト
 
 ```http
@@ -60,6 +63,9 @@ GET /comedian_voices?service=standup&comedian_id=123&before_id=100
 #### 新しい一言の取得
 
 `after_id` を指定すると、そのIDより大きい一言をすべて取得する。
+
+画面表示後に追加された投稿の差分取得を想定するため、現状では `after_id` の取得件数に上限を設けない。
+
 
 ```http
 GET /comedian_voices?service=standup&comedian_id=123&after_id=100
@@ -148,7 +154,7 @@ HTTP 200
 {
   "success": true,
   "voice_id": 120,
-  "comedian_id": 123,
+  "comedian_id": "123",
   "created_at": "2026-11-11 10:00:00"
 }
 ```
@@ -157,7 +163,7 @@ HTTP 200
 |---|---|---|
 | `success` | boolean | 処理結果 |
 | `voice_id` | integer | 登録した一言ID |
-| `comedian_id` | integer | 登録先のコメディアンID |
+| `comedian_id` | string | 登録先のコメディアンID |
 | `created_at` | string | 登録日時 |
 
 ## POST：一言削除

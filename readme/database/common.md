@@ -135,6 +135,9 @@ Standup Spotで使用するロール。
 
 ### Role Authorization
 
+ロールの `status` はサービス利用・プロフィール編集などの権限を表す。Standup の `comedian` ロールを `active` にすると、必要な `member` ロール等の条件を満たす本人はコメディアンプロフィールを編集できる。ただし、ロールが有効であることだけでプロフィールの `status` が `active` になるわけではない。
+
+
 追加ロールの有効判定には、`member` ロールと対象ロールの両方が `active` であることを必要とする。
 
 例：Standup Spotのコメディアンとして有効である条件

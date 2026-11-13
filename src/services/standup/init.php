@@ -2,9 +2,11 @@
 header('Content-Type: application/json; charset=UTF-8');
 
 require_once __DIR__ . '/../../../app/functions/permissions.php';
+require_once __DIR__ . '/../../../app/functions/event.php';
 
 // GETのみ許可
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+  http_response_code(405);
   header('Allow: GET');
   exit;
 }
@@ -101,153 +103,15 @@ if ($user_id !== null) {
 /*
  * イベント取得
  */
-$stmt = $pdo->query('
-  SELECT
-    id,
-    creator_public_id,
-    type,
-    name,
-    message,
-    message_for_comedian,
-    image,
-    status,
-    confirmed_candidate_id
-  FROM standup_events
-  ORDER BY id DESC
-');
+$event_data = getStandupEvents(
+  $pdo,
+  $public_id,
+  $is_comedian,
+  $is_venue_manager
+);
 
-$event_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// イベント情報（候補日の有無に関係なく全件取得）
-$events = [];
-
-foreach ($event_rows as $row) {
-  $event_id = (int) $row['id'];
-
-  $events[$event_id] = [
-    'id' => $event_id,
-    'creator_public_id' => $row['creator_public_id'],
-    'type' => $row['type'],
-    'name' => $row['name'],
-    'message' => $row['message'],
-    'message_for_comedian' => (
-      $is_comedian ||
-      $row['creator_public_id'] === $public_id
-    )
-      ? $row['message_for_comedian']
-      : '',
-    'image' => $row['image'],
-    'status' => $row['status'],
-    'confirmed_candidate_id' => $row['confirmed_candidate_id']
-      !== null
-      ? (int) $row['confirmed_candidate_id']
-      : null,
-  ];
-}
-
-// 候補日情報
-$stmt = $pdo->query('
-  SELECT
-    id,
-    event_id,
-    venue_id,
-    open_at,
-    start_at,
-    fee
-  FROM standup_event_candidates
-  ORDER BY
-    COALESCE(start_at, open_at) ASC,
-    id ASC
-');
-
-$candidate_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// 今日
-$today = new DateTime('today');
-
-// 候補日
-$event_candidates = [];
-
-foreach ($candidate_rows as $row) {
-  $event_id = (string) $row['event_id'];
-  $candidate_id = (int) $row['id'];
-
-  // イベント情報が存在しない場合
-  if (!isset($events[$event_id])) {
-    continue;
-  }
-
-  // 日時判定
-  $candidate_datetime = null;
-
-  if ($row['start_at'] !== null) {
-    $candidate_datetime = new DateTime($row['start_at']);
-  } elseif ($row['open_at'] !== null) {
-    $candidate_datetime = new DateTime($row['open_at']);
-  }
-
-  // 日時未定の場合
-  if ($candidate_datetime === null) {
-
-    // ガード（作成者本人ではない、もしくは comedian でも venue_manager でもない場合）
-    if (
-      $events[$event_id]['creator_public_id'] !== $public_id ||
-      (!$is_comedian && !$is_venue_manager)
-    ) {
-      continue;
-    }
-
-  // 過去の場合は取得対象外
-  } elseif ($candidate_datetime < $today) {
-    continue;
-  }
-
-  // 候補日を追加
-  $event_candidates[$candidate_id] = [
-    'id' => (string)$candidate_id,
-    'event_id' => $event_id,
-    'venue_id' => $row['venue_id'] !== null
-      ? (string) $row['venue_id']
-      : null,
-    'open_at' => $row['open_at'],
-    'start_at' => $row['start_at'],
-    'fee' => $row['fee'],
-    'comedian_ids' => [],
-  ];
-}
-
-// 候補日に出演するコメディアンを取得
-$candidate_id_list = array_keys($event_candidates);
-
-if (count($candidate_id_list) > 0) {
-  $placeholders = implode(
-    ',',
-    array_fill(0, count($candidate_id_list), '?')
-  );
-
-  $stmt = $pdo->prepare("
-    SELECT
-      candidate_id,
-      comedian_id
-    FROM standup_event_candidate_comedians
-    WHERE candidate_id IN ($placeholders)
-  ");
-
-  $stmt->execute($candidate_id_list);
-
-  foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-    $candidate_id = (int) $row['candidate_id'];
-    $comedian_id = (string) $row['comedian_id'];
-
-    if (isset($event_candidates[$candidate_id])) {
-      $event_candidates[$candidate_id]['comedian_ids'][] = $comedian_id;
-    }
-  }
-}
-
-// 通常の配列へ変換
-$events = array_values($events);
-$event_candidates = array_values($event_candidates);
+$events = $event_data['events'];
+$event_candidates = $event_data['event_candidates'];
 
 
 /*

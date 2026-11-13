@@ -1,22 +1,22 @@
-# Standup Spot DATABASE Documentation
+# Standup Spot DATABASE
 
 Standup Spot で使用するデータベースの構造、テーブル間の関連、制約などを管理する。
 
-## Database Structure
+## 構造
 
 データベースは用途ごとにディレクトリを分けて管理する。
 
-| Directory | Description | Documentation |
+| Directory | 概略 | 仕様書 |
 |---|---|---|
 | `000_common` | ユーザー・認証・ロール管理 | [common.md](./common.md) |
 | `001_standup` | Standup Spotのサービス固有データ | [standup.md](./standup.md) |
 | `101_stations` | 駅・路線情報 | [stations.md](./stations.md) |
 
-## Table List
+## テーブル
 
 ### Common
 
-| Table | Description |
+| Table | 概略 |
 |---|---|
 | `users` | ユーザー情報 |
 | `user_remember_tokens` | ログイン継続用トークン |
@@ -25,10 +25,10 @@ Standup Spot で使用するデータベースの構造、テーブル間の関�
 
 ### Standup
 
-| Table | Description |
+| Table | 概略 |
 |---|---|
 | `standup_comedians` | コメディアン情報 |
-| `standup_comedian_voices` | コメディアンの声 |
+| `standup_comedian_voices` | コメディアンの一言 |
 | `standup_venues` | 会場情報 |
 | `standup_venue_managers` | 会場管理者情報 |
 | `standup_events` | イベント情報 |
@@ -37,7 +37,7 @@ Standup Spot で使用するデータベースの構造、テーブル間の関�
 
 ### Stations
 
-| Table | Description |
+| Table | 概略 |
 |---|---|
 | `m_station` | 駅情報 |
 | `m_line` | 路線情報 |
@@ -113,6 +113,19 @@ Standup Spot で使用するデータベースの構造、テーブル間の関�
 - `ON DELETE RESTRICT`：関連データが存在する場合、削除を制限する。
 
 各テーブルの詳細は個別のDATABASE仕様書を参照する。
+
+## Date and Time Columns
+
+日時カラムには、用途および既存のテーブル定義に応じて `DATETIME` または `TIMESTAMP` を使用する。
+両方の型が存在すること自体を不整合とは扱わず、型の統一を目的とした既存カラムの変更は行わない。
+
+- イベントの開場日時・開始日時など、開催地域の日時を表すカラムには `DATETIME` を使用する（例：`standup_event_candidates.open_at`、`start_at`）。
+- レコードの作成日時・更新日時などには、各テーブルの既存定義に従って `DATETIME` または `TIMESTAMP` を使用する。
+- ログイン継続用トークンの有効期限・最終使用日時なども、既存のカラム型を維持する。
+- `TIMESTAMP` はMySQLのセッションタイムゾーンに応じて変換される。一方、`DATETIME` はタイムゾーン情報を保持せず、MySQLによる自動変換も行わない。
+- 保存値のタイムゾーンはカラム型だけでは確定しない。PHP・MySQLの設定や日時を生成・解釈する処理を確認せずに、既存データがUTCまたは日本時間であると断定しない。
+
+各カラムの正確な型は個別のDATABASE仕様書およびSQL定義を参照する。
 
 ## SQL Files
 

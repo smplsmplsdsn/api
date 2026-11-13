@@ -39,6 +39,9 @@
 
 ### `status` イベントステータス
 
+`limited` は画面表示上の募集区分として使用する。`recruiting`・`limited`・`closed` の違いによって、`/candidate_participation` の参加表明・キャンセル可否を制御しない。
+
+
 | 値 | Description |
 |---|---|
 | `recruiting` | 募集中 |
@@ -79,6 +82,9 @@
 日時の形式は `Y-m-d H:i:s` とする。
 
 日時が空文字または `null` の場合は `NULL` として登録する。
+
+`open_at` と `start_at` が両方 `NULL` の候補も登録できる。日時未定候補の取得対象は `/init`・`/events` など各取得APIの条件に従い、画面上の表示位置はフロントエンドの表示仕様による（S-15）。
+
 
 `candidates` に空配列 `[]` を指定することもできる。
 

@@ -13,7 +13,7 @@ Standup Spot の初期表示に必要な情報をまとめて取得するAPI。
 - **Method:** GET
 - **Endpoint:** `/init?service=standup`
 
-GET以外のリクエストは受け付けない。
+GET以外のリクエストにはHTTP 405を返し、`Allow: GET` ヘッダーを設定して終了する。この場合、JSONのエラーボディは返さない。
 
 ## レスポンス
 
@@ -139,7 +139,7 @@ IDの昇順で取得する。
 
 | Key | Type | Description |
 |---|---|---|
-| `id` | number | イベントID |
+| `id` | string | イベントID |
 | `creator_public_id` | string | 作成者のユーザー公開ID |
 | `type` | string | イベント種別 |
 | `name` | string | イベント名 |
@@ -186,6 +186,9 @@ IDの昇順で取得する。
 候補日は `COALESCE(start_at, open_at)` の昇順、同じ日時の場合は候補日IDの昇順で取得する。
 
 ### `latest_voices` 最新の一言
+
+`/init` の `latest_voices` は初期表示用の公開一覧であり、個別のコメディアンの投稿履歴を取得する `/comedian_voices` GET や、本人が投稿・削除する POST とは用途・認可条件が異なる。取得条件は以下に従う。
+
 
 コメディアンごとの最新の一言を取得する。全体で最大10件。
 
